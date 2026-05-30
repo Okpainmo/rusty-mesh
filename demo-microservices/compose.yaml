@@ -1,0 +1,105 @@
+services:
+  rusty-mesh:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      APP__ENV: production
+      APP__SERVER__HOST: 0.0.0.0
+      APP__SERVER__PORT: 3080
+      APP__REGISTRY__HEARTBEAT_INTERVAL_SECS: 5
+      APP__REGISTRY__SERVICE_TTL_SECS: 15
+    ports:
+      - "3080:3080"
+
+  user-service-1:
+    build:
+      context: ./user-service
+    environment:
+      SERVICE_NAME: user-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: user-service-1
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+  user-service-2:
+    build:
+      context: ./user-service
+    environment:
+      SERVICE_NAME: user-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: user-service-2
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+  catalog-service-1:
+    build:
+      context: ./catalog-service
+    environment:
+      SERVICE_NAME: catalog-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: catalog-service-1
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+  catalog-service-2:
+    build:
+      context: ./catalog-service
+    environment:
+      SERVICE_NAME: catalog-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: catalog-service-2
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+  order-service-1:
+    build:
+      context: ./order-service
+    environment:
+      SERVICE_NAME: order-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: order-service-1
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+  order-service-2:
+    build:
+      context: ./order-service
+    environment:
+      SERVICE_NAME: order-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: order-service-2
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+  cart-service-1:
+    build:
+      context: ./cart-service
+    environment:
+      SERVICE_NAME: cart-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: cart-service-1
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+  cart-service-2:
+    build:
+      context: ./cart-service
+    environment:
+      SERVICE_NAME: cart-service
+      SERVICE_BIND_HOST: 0.0.0.0
+      SERVICE_ADVERTISE_HOST: cart-service-2
+      MESH_URL: http://rusty-mesh:3080
+    depends_on:
+      - rusty-mesh
+
+networks:
+  default:
+    name: rusty-mesh-demo-net
