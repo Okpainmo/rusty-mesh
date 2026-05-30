@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+
+info() {
+  printf '%s\n' "$1"
+}
+
+info "📝 Commit message: validating Conventional Commit format..."
+bunx --no -- commitlint --edit "$1"
+info "✅ Commit message: validation passed."

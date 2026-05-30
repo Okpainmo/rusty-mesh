@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+
+info() {
+  printf '%s\n' "$1"
+}
+
+info "🔎 Pre-commit: checking Rust code compiles..."
+cargo check || exit 1
+
+info "🎨 Pre-commit: verifying rustfmt formatting..."
+cargo fmt -- --check || exit 1
+
+info "📎 Pre-commit: running Clippy with warnings denied..."
+# cargo clippy || exit 1
+cargo clippy --all-targets --all-features -- -D warnings || exit 1
+
+info "📝 Checking markdown formatting..."
+bunx prettier --write "**/*.md" || exit 1
+
+info "✅ Pre-commit: all checks passed. Commit approved."
