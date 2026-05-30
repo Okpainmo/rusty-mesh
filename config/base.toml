@@ -1,0 +1,16 @@
+[app]
+name = "mesh_service"
+environment = "development"
+
+[client_integrations]
+allow_logging_middleware = true
+allow_request_timeout_middleware = true
+
+[server]
+host = "127.0.0.1"
+port = 3080
+request_timeout_secs = 60
+
+[registry]
+heartbeat_interval_secs = 5
+service_ttl_secs = 15

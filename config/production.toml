@@ -1,0 +1,5 @@
+[app]
+environment = "production"
+
+[server]
+host = "0.0.0.0"
