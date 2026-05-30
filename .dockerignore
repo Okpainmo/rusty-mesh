@@ -1,0 +1,10 @@
+/target
+/.git
+/.github
+/.cargo
+/.husky
+/node_modules
+/.env
+/config/local.toml
+Dockerfile
+compose.yaml
