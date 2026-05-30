@@ -1,0 +1,26 @@
+/target
+
+# .env
+.env.development
+.env.production
+.env.staging
+.env
+
+# extras
+.idea
+.vscode
+bash.exe.stackdump
+NOTES.md
+
+# node modules
+node_modules
+
+# traffic simulation
+k6-traffic-simulation.js
+
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
