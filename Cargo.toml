@@ -1,0 +1,31 @@
+[package]
+name = "rusty-mesh"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "in-memory mesh service registry"
+repository = "https://github.com/Okpainmo/rusty-mesh"
+homepage = "https://github.com/Okpainmo/rusty-mesh"
+license = "MIT"
+
+[lib]
+name = "mesh"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.102"
+axum = "0.8.8"
+config = "0.15.19"
+dotenvy = "0.15.7"
+rand = "0.8.5"
+semver = "1.0.27"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+thiserror = "2.0.18"
+tokio = { version = "1.49.0", features = ["full"] }
+tower = { version = "0.5.2", features = ["util"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["fmt", "json", "time"] }
+
+[dev-dependencies]
+http-body-util = "0.1.3"
