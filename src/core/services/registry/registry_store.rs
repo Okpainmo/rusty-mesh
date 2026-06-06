@@ -1,5 +1,4 @@
 use crate::core::structs::service_instance::ServiceInstance;
-use rand::seq::SliceRandom;
 use semver::{Version, VersionReq};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +19,7 @@ pub enum RegistryError {
 #[derive(Clone, Debug)]
 pub struct RegistryStore {
     services: Arc<RwLock<HashMap<String, ServiceInstance>>>,
+    round_robin_cursors: Arc<RwLock<HashMap<String, usize>>>,
     ttl_secs: u64,
 }
 
@@ -27,6 +27,7 @@ impl RegistryStore {
     pub fn new(ttl_secs: u64) -> Self {
         Self {
             services: Arc::new(RwLock::new(HashMap::new())),
+            round_robin_cursors: Arc::new(RwLock::new(HashMap::new())),
             ttl_secs,
         }
     }
@@ -113,7 +114,35 @@ impl RegistryStore {
             .cloned()
             .collect::<Vec<_>>();
 
-        Ok(candidates.choose(&mut rand::thread_rng()).cloned())
+        let cursor_key = format!("{}:{}:{}", name, version_requirement, port);
+        Ok(self.select_round_robin(cursor_key, candidates).await)
+    }
+
+    pub async fn find_balanced(
+        &self,
+        name: &str,
+        version_requirement: &str,
+    ) -> Result<Option<ServiceInstance>, RegistryError> {
+        let requirement = VersionReq::parse(version_requirement).map_err(|_| {
+            RegistryError::InvalidVersionRequirement(version_requirement.to_string())
+        })?;
+
+        let mut services = self.services.write().await;
+        Self::cleanup_locked(&mut services, self.ttl_secs);
+
+        let candidates = services
+            .values()
+            .filter(|service| service.name == name)
+            .filter(|service| {
+                Version::parse(&service.version)
+                    .map(|version| requirement.matches(&version))
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let cursor_key = format!("{}:{}", name, version_requirement);
+        Ok(self.select_round_robin(cursor_key, candidates).await)
     }
 
     pub async fn list(&self) -> Vec<ServiceInstance> {
@@ -121,13 +150,7 @@ impl RegistryStore {
         Self::cleanup_locked(&mut services, self.ttl_secs);
 
         let mut service_list = services.values().cloned().collect::<Vec<_>>();
-        service_list.sort_by(|a, b| {
-            a.name
-                .cmp(&b.name)
-                .then_with(|| a.version.cmp(&b.version))
-                .then_with(|| a.ip.cmp(&b.ip))
-                .then_with(|| a.port.cmp(&b.port))
-        });
+        Self::sort_instances(&mut service_list);
         service_list
     }
 
@@ -139,6 +162,35 @@ impl RegistryStore {
                 info!("Removed expired service {}", key);
             }
             keep
+        });
+    }
+
+    async fn select_round_robin(
+        &self,
+        cursor_key: String,
+        mut candidates: Vec<ServiceInstance>,
+    ) -> Option<ServiceInstance> {
+        if candidates.is_empty() {
+            return None;
+        }
+
+        Self::sort_instances(&mut candidates);
+
+        let mut cursors = self.round_robin_cursors.write().await;
+        let cursor = cursors.entry(cursor_key).or_insert(0);
+        let selected_index = *cursor % candidates.len();
+        *cursor = cursor.saturating_add(1) % candidates.len();
+
+        candidates.get(selected_index).cloned()
+    }
+
+    fn sort_instances(services: &mut [ServiceInstance]) {
+        services.sort_by(|a, b| {
+            a.name
+                .cmp(&b.name)
+                .then_with(|| a.version.cmp(&b.version))
+                .then_with(|| a.ip.cmp(&b.ip))
+                .then_with(|| a.port.cmp(&b.port))
         });
     }
 }
@@ -275,6 +327,97 @@ mod tests {
             .expect("service should be found");
 
         assert_eq!(service.port, 4000);
+    }
+
+    #[tokio::test]
+    async fn find_balanced_cycles_through_sorted_matching_services() {
+        let registry = RegistryStore::new(15);
+
+        registry
+            .register(
+                "orders".to_string(),
+                "1.2.3".to_string(),
+                "10.0.0.3".to_string(),
+                3003,
+            )
+            .await
+            .expect("service registration should succeed");
+        registry
+            .register(
+                "orders".to_string(),
+                "1.2.3".to_string(),
+                "10.0.0.1".to_string(),
+                3001,
+            )
+            .await
+            .expect("service registration should succeed");
+        registry
+            .register(
+                "orders".to_string(),
+                "1.2.3".to_string(),
+                "10.0.0.2".to_string(),
+                3002,
+            )
+            .await
+            .expect("service registration should succeed");
+
+        let first = registry
+            .find_balanced("orders", "^1.0.0")
+            .await
+            .expect("lookup should succeed")
+            .expect("service should be found");
+        let second = registry
+            .find_balanced("orders", "^1.0.0")
+            .await
+            .expect("lookup should succeed")
+            .expect("service should be found");
+        let third = registry
+            .find_balanced("orders", "^1.0.0")
+            .await
+            .expect("lookup should succeed")
+            .expect("service should be found");
+        let fourth = registry
+            .find_balanced("orders", "^1.0.0")
+            .await
+            .expect("lookup should succeed")
+            .expect("service should be found");
+
+        assert_eq!(first.ip, "10.0.0.1");
+        assert_eq!(second.ip, "10.0.0.2");
+        assert_eq!(third.ip, "10.0.0.3");
+        assert_eq!(fourth.ip, "10.0.0.1");
+    }
+
+    #[tokio::test]
+    async fn find_balanced_filters_by_semver_requirement() {
+        let registry = RegistryStore::new(15);
+
+        registry
+            .register(
+                "orders".to_string(),
+                "1.2.3".to_string(),
+                "10.0.0.1".to_string(),
+                3001,
+            )
+            .await
+            .expect("service registration should succeed");
+        registry
+            .register(
+                "orders".to_string(),
+                "2.0.0".to_string(),
+                "10.0.0.2".to_string(),
+                3002,
+            )
+            .await
+            .expect("service registration should succeed");
+
+        let service = registry
+            .find_balanced("orders", "^2.0.0")
+            .await
+            .expect("lookup should succeed")
+            .expect("service should be found");
+
+        assert_eq!(service.version, "2.0.0");
     }
 
     #[tokio::test]
