@@ -31,6 +31,41 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.get("/get-order-feedback", (req, res) => {
+  res.json({
+    service: serviceName,
+    message: "Order service says the demo order is ready",
+    data: {
+      order_id: "order-1001",
+      status: "ready",
+      total: 59.99
+    }
+  });
+});
+
+app.get("/call-user-service", async (req, res) => {
+  const calledService = "user-service";
+
+  try {
+    const peer = await registryClient.discover(calledService);
+    const peerResponse = await registryClient.callFeedback(
+      peer,
+      "/get-user-feedback"
+    );
+
+    res.json({
+      service: serviceName,
+      called_service: calledService,
+      peer_response: peerResponse
+    });
+  } catch (error) {
+    res.status(502).json({
+      service: serviceName,
+      error: error.message
+    });
+  }
+});
+
 async function cleanup() {
   if (cleaned) {
     return;
@@ -40,6 +75,7 @@ async function cleanup() {
   if (heartbeat) {
     clearInterval(heartbeat);
   }
+  
   if (registryClient) {
     await registryClient.unregister().catch((error) => {
       console.error(`${serviceName}:${serviceVersion} unregister failed`, error);

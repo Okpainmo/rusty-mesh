@@ -3,7 +3,7 @@ import os
 import socket
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from registry_client import MeshRegistryClient
 
@@ -18,6 +18,7 @@ HEARTBEAT_INTERVAL_SECS = int(os.getenv("HEARTBEAT_INTERVAL_SECS", "5"))
 
 app = FastAPI(title=SERVICE_NAME)
 assigned_port = 0
+registry_client: MeshRegistryClient | None = None
 
 
 @app.get("/health")
@@ -30,8 +31,43 @@ async def health():
     }
 
 
+@app.get("/get-cart-feedback")
+async def feedback():
+    return {
+        "service": SERVICE_NAME,
+        "message": "Cart service says the demo cart is ready for checkout",
+        "data": {
+            "cart_id": "cart-1001",
+            "items": 3,
+            "subtotal": 59.99,
+        },
+    }
+
+
+@app.get("/call-order-service")
+async def call_peer():
+    if registry_client is None:
+        raise HTTPException(status_code=503, detail="registry client is not ready")
+
+    called_service = "order-service"
+
+    try:
+        peer = await registry_client.discover(called_service)
+        peer_response = await registry_client.call_feedback(
+            peer,
+            "/get-order-feedback",
+        )
+        return {
+            "service": SERVICE_NAME,
+            "called_service": called_service,
+            "peer_response": peer_response,
+        }
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
 async def main() -> None:
-    global assigned_port
+    global assigned_port, registry_client
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

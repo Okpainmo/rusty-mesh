@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
@@ -19,6 +20,18 @@ struct ServiceRegistrationRequest<'a> {
     service_name: &'a str,
     service_version: &'a str,
     service_port: u16,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ServiceInstance {
+    pub name: String,
+    pub ip: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+struct MeshResponse<T> {
+    response: Option<T>,
 }
 
 impl MeshRegistryClient {
@@ -67,6 +80,48 @@ impl MeshRegistryClient {
         Ok(())
     }
 
+    pub async fn discover(&self, service_name: &str) -> Result<ServiceInstance> {
+        let version_requirement = "^1.0.0";
+        let encoded_requirement = encode_version_requirement(version_requirement);
+
+        let response = self
+            .http
+            .get(format!(
+                "{}/api/v1/mesh/services/{}/{}",
+                self.mesh_url, service_name, encoded_requirement
+            ))
+            .send()
+            .await
+            .context("failed to request mesh service discovery")?
+            .error_for_status()
+            .context("mesh rejected service discovery request")?
+            .json::<MeshResponse<ServiceInstance>>()
+            .await
+            .context("failed to decode mesh service discovery response")?;
+
+        response
+            .response
+            .context("mesh service discovery response was empty")
+    }
+
+    pub async fn call_feedback(&self, service: &ServiceInstance, path: &str) -> Result<Value> {
+        self.http
+            .get(format!("http://{}:{}{}", service.ip, service.port, path))
+            .send()
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to call feedback endpoint '{}' for {} at {}:{}",
+                    path, service.name, service.ip, service.port
+                )
+            })?
+            .error_for_status()
+            .context("peer feedback endpoint returned an error")?
+            .json::<Value>()
+            .await
+            .context("failed to decode peer feedback response")
+    }
+
     pub fn start_heartbeat(&self, heartbeat_interval_secs: u64) -> JoinHandle<()> {
         let client = self.clone();
 
@@ -93,4 +148,13 @@ impl MeshRegistryClient {
             service_port: self.service_port,
         }
     }
+}
+
+fn encode_version_requirement(requirement: &str) -> String {
+    requirement
+        .replace('^', "%5E")
+        .replace('>', "%3E")
+        .replace('<', "%3C")
+        .replace('=', "%3D")
+        .replace(' ', "%20")
 }

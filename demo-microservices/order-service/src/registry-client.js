@@ -36,6 +36,38 @@ function createRegistryClient({
     await send("DELETE");
   }
 
+  async function discover(serviceName) {
+    const versionRequirement = encodeURIComponent("^1.0.0");
+    const response = await fetch(
+      `${baseUrl}/api/v1/mesh/services/${serviceName}/${versionRequirement}`
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`service discovery failed: ${response.status} ${text}`);
+    }
+
+    const payload = await response.json();
+    if (!payload.response) {
+      throw new Error(`service '${serviceName}' was not registered`);
+    }
+
+    return payload.response;
+  }
+
+  async function callFeedback(service, path) {
+    const response = await fetch(`http://${service.ip}:${service.port}${path}`);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `feedback call to ${service.name}${path} failed: ${response.status} ${text}`
+      );
+    }
+
+    return response.json();
+  }
+
   function startHeartbeat(heartbeatIntervalSecs = 5) {
     return setInterval(() => {
       register().catch((error) => {
@@ -45,6 +77,8 @@ function createRegistryClient({
   }
 
   return {
+    callFeedback,
+    discover,
     register,
     unregister,
     startHeartbeat

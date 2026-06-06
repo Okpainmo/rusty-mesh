@@ -2,6 +2,7 @@ import asyncio
 import json
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 from dataclasses import dataclass
 
 
@@ -32,6 +33,12 @@ class MeshRegistryClient:
 
     async def unregister(self) -> None:
         await asyncio.to_thread(self._send, "DELETE")
+
+    async def discover(self, service_name: str) -> dict:
+        return await asyncio.to_thread(self._discover, service_name)
+
+    async def call_feedback(self, service: dict, path: str) -> dict:
+        return await asyncio.to_thread(self._call_feedback, service, path)
 
     async def heartbeat_loop(self, heartbeat_interval_secs: int = 5) -> None:
         while True:
@@ -65,4 +72,29 @@ class MeshRegistryClient:
             details = error.read().decode("utf-8")
             raise RuntimeError(
                 f"{method} registration failed with status {error.code}: {details}"
+            ) from error
+
+    def _discover(self, service_name: str) -> dict:
+        version_requirement = quote("^1.0.0", safe="")
+        url = f"{self.services_url}/{service_name}/{version_requirement}"
+
+        with urllib.request.urlopen(url, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        service = payload.get("response")
+        if service is None:
+            raise RuntimeError(f"service '{service_name}' was not registered")
+
+        return service
+
+    def _call_feedback(self, service: dict, path: str) -> dict:
+        url = f"http://{service['ip']}:{service['port']}{path}"
+
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            details = error.read().decode("utf-8")
+            raise RuntimeError(
+                f"feedback call to {service.get('name')}{path} failed with status {error.code}: {details}"
             ) from error

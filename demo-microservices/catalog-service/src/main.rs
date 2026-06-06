@@ -1,6 +1,7 @@
 use anyhow::Result;
-use axum::{Json, Router, routing::get};
+use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
 use serde::Serialize;
+use serde_json::Value;
 use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -22,6 +23,7 @@ struct ServiceConfig {
 #[derive(Clone)]
 struct AppState {
     config: ServiceConfig,
+    registry: MeshRegistryClient,
     port: u16,
 }
 
@@ -31,6 +33,33 @@ struct HealthResponse {
     version: String,
     status: String,
     port: u16,
+}
+
+#[derive(Serialize)]
+struct FeedbackResponse {
+    service: String,
+    message: String,
+    data: CatalogFeedbackData,
+}
+
+#[derive(Serialize)]
+struct CatalogFeedbackData {
+    featured_sku: String,
+    stock: u16,
+    available: bool,
+}
+
+#[derive(Serialize)]
+struct CallPeerResponse {
+    service: String,
+    called_service: String,
+    peer_response: Value,
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    service: String,
+    error: String,
 }
 
 #[tokio::main]
@@ -51,10 +80,13 @@ async fn main() -> Result<()> {
 
     let state = AppState {
         config: config.clone(),
+        registry: registry.clone(),
         port,
     };
     let app = Router::new()
         .route("/health", get(health))
+        .route("/get-catalog-feedback", get(feedback))
+        .route("/call-cart-service", get(call_peer))
         .with_state(state);
 
     println!(
@@ -86,6 +118,60 @@ async fn health(
         status: "ok".to_string(),
         port: state.port,
     })
+}
+
+async fn feedback(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> Json<FeedbackResponse> {
+    Json(FeedbackResponse {
+        service: state.config.service_name,
+        message: "Catalog service says the featured item is available".to_string(),
+        data: CatalogFeedbackData {
+            featured_sku: "sku-1001".to_string(),
+            stock: 42,
+            available: true,
+        },
+    })
+}
+
+async fn call_peer(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl IntoResponse {
+    let called_service = "cart-service";
+
+    match state.registry.discover(called_service).await {
+        Ok(peer) => match state
+            .registry
+            .call_feedback(&peer, "/get-cart-feedback")
+            .await
+        {
+            Ok(peer_response) => (
+                StatusCode::OK,
+                Json(CallPeerResponse {
+                    service: state.config.service_name,
+                    called_service: called_service.to_string(),
+                    peer_response,
+                }),
+            )
+                .into_response(),
+            Err(error) => (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    service: state.config.service_name,
+                    error: error.to_string(),
+                }),
+            )
+                .into_response(),
+        },
+        Err(error) => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                service: state.config.service_name,
+                error: error.to_string(),
+            }),
+        )
+            .into_response(),
+    }
 }
 
 async fn shutdown_signal() {

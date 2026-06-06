@@ -1,23 +1,24 @@
 # Rusty Mesh Demo Microservices
 
-This folder contains four tiny services that demonstrate how real microservices can integrate with
-Rusty Mesh for registration, heartbeat refresh, discovery, and shutdown unregistration.
+This folder contains four small services that show Rusty Mesh in action across multiple runtimes:
+Rust, Node, and Python. Together they demonstrate registration, heartbeat refresh, load-balanced
+discovery, inter-service calls, and shutdown unregistration.
 
-The implementation mirrors the lifecycle pattern from the referenced Node microservices workspace:
+Each microservice:
 
-- bind to a dynamic OS-assigned port
-- register the actual assigned port with the registry after the server starts
-- refresh the registration on a heartbeat interval
-- unregister during graceful shutdown where the runtime supports it
+- binds to a dynamic OS-assigned port
+- registers the actual assigned port with the registry after the server starts
+- refreshes the registration on a heartbeat interval
+- unregisters during graceful shutdown where the runtime supports it
 
 ## Services
 
-| Service           | Runtime        | Endpoint      |
-| ----------------- | -------------- | ------------- |
-| `user-service`    | Rust + Axum    | `GET /health` |
-| `catalog-service` | Rust + Axum    | `GET /health` |
-| `order-service`   | Node + Express | `GET /health` |
-| `cart-service`    | Python/FastAPI | `GET /health` |
+| Service           | Runtime        | Endpoints                                                        |
+| ----------------- | -------------- | ---------------------------------------------------------------- |
+| `user-service`    | Rust + Axum    | `GET /health`, `/get-user-feedback`, `/call-catalog-service`     |
+| `catalog-service` | Rust + Axum    | `GET /health`, `/get-catalog-feedback`, `/call-cart-service`     |
+| `order-service`   | Node + Express | `GET /health`, `/get-order-feedback`, `/call-user-service`       |
+| `cart-service`    | Python/FastAPI | `GET /health`, `/get-cart-feedback`, `/call-order-service`       |
 
 All services use dynamic ports by default. Each `/health` response includes the actual assigned
 port:
@@ -48,6 +49,24 @@ Each service understands these environment variables:
 Each service is self-contained. The Rust, Node, and Python registry clients live inside the service
 folders that use them, so each service can be built and shipped independently.
 
+## Inter-Service Communication
+
+Each service exposes one explicit feedback endpoint for other services. Each service also exposes
+one explicit call endpoint that discovers another service through Rusty Mesh and calls that
+service's feedback endpoint. The discovery step uses Rusty Mesh's load-balanced service lookup.
+
+The demo call chain is:
+
+| Caller            | Call endpoint          | Peer feedback endpoint  |
+| ----------------- | ---------------------- | ----------------------- |
+| `user-service`    | `/call-catalog-service` | `/get-catalog-feedback` |
+| `catalog-service` | `/call-cart-service`    | `/get-cart-feedback`    |
+| `cart-service`    | `/call-order-service`   | `/get-order-feedback`   |
+| `order-service`   | `/call-user-service`    | `/get-user-feedback`    |
+
+The responses use hard-coded dummy data only. There is no database, authentication, or authorization
+gate in this demo.
+
 ## Registry Contract
 
 Registration and heartbeat refresh:
@@ -72,7 +91,13 @@ Request body:
 }
 ```
 
-Discovery:
+Load-balanced discovery:
+
+```http
+GET /api/v1/mesh/services/{service_name}/{service_version}
+```
+
+Exact-port discovery:
 
 ```http
 GET /api/v1/mesh/services/{service_name}/{service_version}/{service_port}
@@ -93,7 +118,7 @@ Then start any demo service in another terminal.
 From this directory:
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
 The compose setup starts:
@@ -111,6 +136,18 @@ List everything registered with the mesh:
 
 ```bash
 curl http://127.0.0.1:3080/api/v1/mesh/services
+```
+
+Call a service's peer-demo endpoint from inside the Compose network:
+
+```bash
+docker compose run --rm --entrypoint python cart-service-1 -c '
+import json, urllib.request
+services = json.loads(urllib.request.urlopen("http://rusty-mesh:3080/api/v1/mesh/services").read())["response"]["services"]
+service = next(item for item in services if item["name"] == "user-service")
+url = "http://{}:{}/call-catalog-service".format(service["ip"], service["port"])
+print(urllib.request.urlopen(url).read().decode())
+'
 ```
 
 For ad hoc extra capacity, add another service entry to `compose.yaml` with the same build context
