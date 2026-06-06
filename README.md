@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-Rusty Mesh is a lightweight service registry for real-world microservice systems. It provides
+Rusty Mesh is a lightweight orchestrator for microservice/distributed systems. It provides
 service registration, service discovery, health checks, heartbeat/TTL liveness policy, and
 semantic-version matching through a focused HTTP API built with Rust, Axum, Tokio, and Serde.
 
