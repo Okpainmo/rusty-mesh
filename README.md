@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-Rusty Mesh is a lightweight orchestrator for microservice/distributed systems. It provides
-service registration, service discovery, health checks, heartbeat/TTL liveness policy, and
-semantic-version matching through a focused HTTP API built with Rust, Axum, Tokio, and Serde.
+Rusty Mesh is a lightweight orchestrator for microservice/distributed systems. It provides service
+registration, service discovery, health checks, heartbeat/TTL liveness policy, and semantic-version
+matching through a focused HTTP API built with Rust, Axum, Tokio, and Serde.
 
 The current implementation uses an in-memory registry so teams can integrate it quickly, run it
 locally or in containers, and validate service-discovery flows without adding an external database.
