@@ -3,14 +3,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-Rusty Mesh is a lightweight orchestrator for microservice/distributed systems. It provides service
-registration, service discovery, health checks, heartbeat/TTL liveness policy, and semantic-version
-matching through a focused HTTP API built with Rust, Axum, Tokio, and Serde.
+Rusty Mesh is a fast in-memory orchestration layer for microservice/distributed systems. It gives
+services a focused HTTP control plane for registration, heartbeat-based liveness, semantic version
+matching, health checks, and sorted round-robin load balancing across compatible instances.
 
-The current implementation uses an in-memory registry so teams can integrate it quickly, run it
-locally or in containers, and validate service-discovery flows without adding an external database.
-Its API and structure are designed to grow into persistent or distributed backends as deployment
-needs increase.
+Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want service discovery they
+can run locally, ship in containers, and reason about without pulling in an external database on day
+one. The API and internal structure leave a clear path toward persistent or distributed backends as
+deployment needs grow.
+
+> The project's main focus is the mesh(orchestrator) service. But for easy onboarding, included, is
+> a [demo-microservices directory](./demo-microservices) with four(4) demo
+> microservices(`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
+> `catalog-service - rust`) that use the orchestrator, and would help to clearly guide engineering
+> teams with integrating `rusty-mesh` into their microservices/distributed systems builds.
 
 ## Core Capabilities
 
@@ -22,7 +28,7 @@ needs increase.
 
 - Discover a compatible service instance using semantic-version requirements.
 
-- Randomly select one compatible instance when multiple candidates are available.
+- Select compatible service instances with sorted round-robin load balancing.
 
 - Automatically remove expired service instances using a configured heartbeat interval and TTL.
 
@@ -66,7 +72,9 @@ instance stores:
 - `port`
 - `timestamp`
 
-Expired entries are removed during register, find, and list operations.
+Expired entries are removed during register, find, and list operations. Load-balanced discovery
+sorts matching instances by name, version, IP address, and port, then returns the next instance
+using a round-robin cursor for that service and version requirement.
 
 Rusty Mesh treats service registration as a heartbeat-driven contract. Registered services should
 refresh their registration before `registry.service_ttl_secs` elapses. Startup validation enforces
@@ -162,13 +170,14 @@ All endpoints are nested under:
 /api/v1/mesh
 ```
 
-| Method | Path                                                        | Purpose                           |
-| ------ | ----------------------------------------------------------- | --------------------------------- |
-| GET    | `/health`                                                   | Check service health              |
-| GET    | `/services`                                                 | List active service instances     |
-| POST   | `/services`                                                 | Register or refresh an instance   |
-| DELETE | `/services`                                                 | Unregister an instance            |
-| GET    | `/services/{service_name}/{service_version}/{service_port}` | Find a compatible service version |
+| Method | Path                                                        | Purpose                                                    |
+| ------ | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| GET    | `/health`                                                   | Check service health                                       |
+| GET    | `/services`                                                 | List active service instances                              |
+| POST   | `/services`                                                 | Register or refresh an instance                            |
+| DELETE | `/services`                                                 | Unregister an instance                                     |
+| GET    | `/services/{service_name}/{service_version}`                | Find a compatible instance with round-robin load balancing |
+| GET    | `/services/{service_name}/{service_version}/{service_port}` | Find a compatible instance on a specific port              |
 
 ### Register A Service
 
@@ -205,13 +214,13 @@ Production service clients should call this endpoint on the configured heartbeat
 default policy, each service instance should refresh every `5` seconds and expires if it has not
 refreshed within `15` seconds.
 
-### Find A Service
+### Find A Service With Load Balancing
 
 Semantic-version requirements are supported through the `semver` crate. Because characters such as
 `^` are special in URLs, encode them in request paths.
 
 ```bash
-curl http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0/3000
+curl http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0
 ```
 
 Response:
@@ -228,6 +237,18 @@ Response:
   },
   "error": null
 }
+```
+
+When multiple active instances match, Rusty Mesh sorts the candidates by name, version, IP address,
+and port, then returns them in round-robin order on repeated requests.
+
+### Find A Service On A Specific Port
+
+The original port-specific lookup remains available when a client needs to target an exact
+registered port:
+
+```bash
+curl http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0/3000
 ```
 
 If no compatible service is found:
@@ -315,8 +336,9 @@ Discovery accepts semantic-version requirements:
 >=1.0.0,<2.0.0
 ```
 
-When multiple instances match a discovery request, Rusty Mesh returns one random candidate. This
-supports lightweight client-side load balancing across compatible service instances.
+When multiple instances match a load-balanced discovery request, Rusty Mesh sorts the candidates and
+returns them in round-robin order. This gives callers a predictable service-side balancing pattern
+across compatible instances.
 
 ## Configuration
 
@@ -398,7 +420,7 @@ cargo test
 - Service IP detection currently prefers `x-forwarded-for` and falls back to localhost.
 
 These constraints define the first production-facing shape of the service. They keep the registry
-small and easy to operate while leaving a clear path toward persistent storage, replication,
+straightforward to operate while leaving a clear path toward persistent storage, replication,
 authentication, and richer mesh routing layers.
 
 ## License
