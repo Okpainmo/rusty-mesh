@@ -9,6 +9,7 @@ use tokio::task::JoinHandle;
 pub struct MeshRegistryClient {
     http: Client,
     mesh_url: String,
+    mesh_token: Option<String>,
     advertised_host: String,
     service_name: String,
     service_version: String,
@@ -37,6 +38,7 @@ struct MeshResponse<T> {
 impl MeshRegistryClient {
     pub fn new(
         mesh_url: impl Into<String>,
+        mesh_token: Option<String>,
         advertised_host: impl Into<String>,
         service_name: impl Into<String>,
         service_version: impl Into<String>,
@@ -45,6 +47,9 @@ impl MeshRegistryClient {
         Self {
             http: Client::new(),
             mesh_url: mesh_url.into().trim_end_matches('/').to_string(),
+            mesh_token: mesh_token
+                .map(|token| token.trim().to_string())
+                .filter(|token| !token.is_empty()),
             advertised_host: advertised_host.into(),
             service_name: service_name.into(),
             service_version: service_version.into(),
@@ -53,29 +58,33 @@ impl MeshRegistryClient {
     }
 
     pub async fn register(&self) -> Result<()> {
-        self.http
-            .post(format!("{}/api/v1/mesh/services", self.mesh_url))
-            .header("x-forwarded-for", self.advertised_host.as_str())
-            .json(&self.registration_body())
-            .send()
-            .await
-            .context("failed to send service registration request")?
-            .error_for_status()
-            .context("mesh rejected service registration request")?;
+        self.authorized(
+            self.http
+                .post(format!("{}/api/v1/mesh/services", self.mesh_url)),
+        )
+        .header("x-mesh-advertise-host", self.advertised_host.as_str())
+        .json(&self.registration_body())
+        .send()
+        .await
+        .context("failed to send service registration request")?
+        .error_for_status()
+        .context("mesh rejected service registration request")?;
 
         Ok(())
     }
 
     pub async fn unregister(&self) -> Result<()> {
-        self.http
-            .delete(format!("{}/api/v1/mesh/services", self.mesh_url))
-            .header("x-forwarded-for", self.advertised_host.as_str())
-            .json(&self.registration_body())
-            .send()
-            .await
-            .context("failed to send service unregistration request")?
-            .error_for_status()
-            .context("mesh rejected service unregistration request")?;
+        self.authorized(
+            self.http
+                .delete(format!("{}/api/v1/mesh/services", self.mesh_url)),
+        )
+        .header("x-mesh-advertise-host", self.advertised_host.as_str())
+        .json(&self.registration_body())
+        .send()
+        .await
+        .context("failed to send service unregistration request")?
+        .error_for_status()
+        .context("mesh rejected service unregistration request")?;
 
         Ok(())
     }
@@ -85,11 +94,10 @@ impl MeshRegistryClient {
         let encoded_requirement = encode_version_requirement(version_requirement);
 
         let response = self
-            .http
-            .get(format!(
+            .authorized(self.http.get(format!(
                 "{}/api/v1/mesh/services/{}/{}",
                 self.mesh_url, service_name, encoded_requirement
-            ))
+            )))
             .send()
             .await
             .context("failed to request mesh service discovery")?
@@ -146,6 +154,13 @@ impl MeshRegistryClient {
             service_name: &self.service_name,
             service_version: &self.service_version,
             service_port: self.service_port,
+        }
+    }
+
+    fn authorized(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.mesh_token.as_deref() {
+            Some(token) => request.bearer_auth(token),
+            None => request,
         }
     }
 }

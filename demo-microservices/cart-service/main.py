@@ -14,6 +14,7 @@ SERVICE_BIND_HOST = os.getenv("SERVICE_BIND_HOST", "127.0.0.1")
 SERVICE_ADVERTISE_HOST = os.getenv("SERVICE_ADVERTISE_HOST", SERVICE_BIND_HOST)
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "0"))
 MESH_URL = os.getenv("MESH_URL", "http://127.0.0.1:3080")
+MESH_TOKEN = os.getenv("MESH_TOKEN", "").strip() or None
 HEARTBEAT_INTERVAL_SECS = int(os.getenv("HEARTBEAT_INTERVAL_SECS", "5"))
 
 app = FastAPI(title=SERVICE_NAME)
@@ -78,6 +79,7 @@ async def main() -> None:
 
     registry_client = MeshRegistryClient(
         mesh_url=MESH_URL,
+        mesh_token=MESH_TOKEN,
         service_advertise_host=SERVICE_ADVERTISE_HOST,
         service_name=SERVICE_NAME,
         service_version=SERVICE_VERSION,

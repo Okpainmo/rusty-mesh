@@ -17,6 +17,7 @@ struct ServiceConfig {
     service_bind_host: String,
     service_advertise_host: String,
     mesh_url: String,
+    mesh_token: Option<String>,
     heartbeat_interval_secs: u64,
 }
 
@@ -70,6 +71,7 @@ async fn main() -> Result<()> {
 
     let registry = MeshRegistryClient::new(
         config.mesh_url.clone(),
+        config.mesh_token.clone(),
         config.service_advertise_host.clone(),
         config.service_name.clone(),
         config.service_version.clone(),
@@ -202,6 +204,10 @@ fn load_config(default_name: &str) -> ServiceConfig {
         service_bind_host,
         service_advertise_host,
         mesh_url: env::var("MESH_URL").unwrap_or_else(|_| "http://127.0.0.1:3080".to_string()),
+        mesh_token: env::var("MESH_TOKEN")
+            .ok()
+            .map(|token| token.trim().to_string())
+            .filter(|token| !token.is_empty()),
         heartbeat_interval_secs: env::var("HEARTBEAT_INTERVAL_SECS")
             .ok()
             .and_then(|value| value.parse().ok())

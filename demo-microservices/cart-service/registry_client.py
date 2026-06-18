@@ -9,6 +9,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class MeshRegistryClient:
     mesh_url: str
+    mesh_token: str | None
     service_advertise_host: str
     service_name: str
     service_version: str
@@ -27,6 +28,13 @@ class MeshRegistryClient:
                 "service_port": self.service_port,
             }
         ).encode("utf-8")
+
+    @property
+    def auth_headers(self) -> dict[str, str]:
+        if self.mesh_token:
+            return {"authorization": f"Bearer {self.mesh_token}"}
+
+        return {}
 
     async def register(self) -> None:
         await asyncio.to_thread(self._send, "POST")
@@ -58,7 +66,8 @@ class MeshRegistryClient:
             method=method,
             headers={
                 "content-type": "application/json",
-                "x-forwarded-for": self.service_advertise_host,
+                "x-mesh-advertise-host": self.service_advertise_host,
+                **self.auth_headers,
             },
         )
 
@@ -77,8 +86,9 @@ class MeshRegistryClient:
     def _discover(self, service_name: str) -> dict:
         version_requirement = quote("^1.0.0", safe="")
         url = f"{self.services_url}/{service_name}/{version_requirement}"
+        request = urllib.request.Request(url, headers=self.auth_headers)
 
-        with urllib.request.urlopen(url, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             payload = json.loads(response.read().decode("utf-8"))
 
         service = payload.get("response")

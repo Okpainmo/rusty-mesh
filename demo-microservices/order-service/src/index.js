@@ -10,6 +10,7 @@ const serviceAdvertiseHost =
   process.env.SERVICE_ADVERTISE_HOST || serviceBindHost;
 const requestedPort = Number.parseInt(process.env.SERVICE_PORT || "0", 10);
 const meshUrl = process.env.MESH_URL || "http://127.0.0.1:3080";
+const meshToken = (process.env.MESH_TOKEN || "").trim() || null;
 const heartbeatIntervalSecs = Number.parseInt(
   process.env.HEARTBEAT_INTERVAL_SECS || "5",
   10
@@ -100,6 +101,7 @@ server.listen(requestedPort, serviceBindHost, async () => {
 
   registryClient = createRegistryClient({
     meshUrl,
+    meshToken,
     serviceAdvertiseHost,
     serviceName,
     serviceVersion,
