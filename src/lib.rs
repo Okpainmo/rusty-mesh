@@ -30,7 +30,7 @@ pub struct AppState {
 /// routing style used across the Rust services.
 pub fn create_app(state: AppState) -> Router {
     Router::new()
-        .nest("/api/v1/mesh", mesh_routes())
+        .nest("/api/v1/mesh", mesh_routes(&state))
         .layer(middleware::from_fn(logging_middleware))
         .layer(middleware::from_fn_with_state(
             state.clone(),

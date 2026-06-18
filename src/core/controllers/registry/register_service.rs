@@ -73,11 +73,18 @@ pub async fn register_service(
 
 pub(crate) fn get_service_ip(headers: &HeaderMap) -> String {
     let candidate = headers
-        .get("x-forwarded-for")
+        .get("x-mesh-advertise-host")
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(',').next())
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .or_else(|| {
+            headers
+                .get("x-forwarded-for")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.split(',').next())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+        })
         .unwrap_or("127.0.0.1");
 
     normalize_loopback_ip(candidate)

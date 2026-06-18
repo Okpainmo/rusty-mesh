@@ -39,6 +39,12 @@ pub struct RegistrySection {
     pub service_ttl_secs: u64,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct SecuritySection {
+    pub require_mesh_token: bool,
+    pub mesh_token: Option<String>,
+}
+
 /// Root configuration structure containing all application settings.
 #[derive(Clone, Debug, Deserialize)]
 pub struct AppConfig {
@@ -46,6 +52,7 @@ pub struct AppConfig {
     pub client_integrations: ClientIntegrationsSection,
     pub server: ServerSection,
     pub registry: RegistrySection,
+    pub security: SecuritySection,
 }
 
 /// Loads the application configuration.
@@ -85,6 +92,7 @@ pub enum ConfigError {
     InvalidHeartbeatInterval,
     InvalidRegistryTtl,
     InvalidRegistryHeartbeatTtlPair,
+    MissingMeshToken,
 }
 
 impl fmt::Display for ConfigError {
@@ -103,6 +111,10 @@ impl fmt::Display for ConfigError {
             ConfigError::InvalidRegistryHeartbeatTtlPair => write!(
                 f,
                 "registry.heartbeat_interval_secs must be lower than registry.service_ttl_secs"
+            ),
+            ConfigError::MissingMeshToken => write!(
+                f,
+                "security.mesh_token cannot be empty when security.require_mesh_token is true"
             ),
         }
     }
@@ -133,6 +145,17 @@ impl AppConfig {
         if self.registry.heartbeat_interval_secs >= self.registry.service_ttl_secs {
             return Err(ConfigError::InvalidRegistryHeartbeatTtlPair);
         }
+        if self.security.require_mesh_token
+            && self
+                .security
+                .mesh_token
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or_default()
+                .is_empty()
+        {
+            return Err(ConfigError::MissingMeshToken);
+        }
 
         Ok(())
     }
@@ -160,6 +183,10 @@ mod tests {
             registry: RegistrySection {
                 heartbeat_interval_secs: 5,
                 service_ttl_secs: 15,
+            },
+            security: SecuritySection {
+                require_mesh_token: true,
+                mesh_token: Some("test-mesh-token".to_string()),
             },
         }
     }
@@ -199,5 +226,26 @@ mod tests {
             error,
             ConfigError::InvalidRegistryHeartbeatTtlPair
         ));
+    }
+
+    #[test]
+    fn validate_rejects_missing_mesh_token_when_required() {
+        let mut config = valid_config();
+        config.security.mesh_token = Some("   ".to_string());
+
+        let error = config
+            .validate()
+            .expect_err("missing required mesh token should fail");
+
+        assert!(matches!(error, ConfigError::MissingMeshToken));
+    }
+
+    #[test]
+    fn validate_accepts_missing_mesh_token_when_disabled() {
+        let mut config = valid_config();
+        config.security.require_mesh_token = false;
+        config.security.mesh_token = None;
+
+        assert!(config.validate().is_ok());
     }
 }
