@@ -14,3 +14,7 @@ request_timeout_secs = 60
 [registry]
 heartbeat_interval_secs = 5
 service_ttl_secs = 15
+
+[security]
+require_mesh_token = true # read/overwrite from .env
+mesh_token = "mesh-security-token" # read/overwrite from .env
