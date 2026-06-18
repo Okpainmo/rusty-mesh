@@ -8,13 +8,13 @@ services a focused HTTP control plane for registration, heartbeat-based liveness
 matching, health checks, and sorted round-robin load balancing across compatible instances.
 
 Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their
-microservices orchestration layer - without the need to use an external/third-party control plane.
+microservices orchestration layer without needing an external or third-party control plane.
 
-> The project's main focus is the mesh(orchestrator) service. But for easy onboarding, included, is
-> a [demo-microservices directory](./demo-microservices) with four(4) demo
-> microservices(`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
-> `catalog-service - rust`) that utilizes the mesh, and would help to clearly guide engineering
-> teams on how to integrate `rusty-mesh` into their microservices/distributed systems builds.
+> The project's main focus is the mesh/orchestrator service. For easier onboarding, the repository
+> also includes a [demo-microservices directory](./demo-microservices) with four demo microservices
+> (`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
+> `catalog-service - rust`) that use the mesh and show how engineering teams can integrate
+> `rusty-mesh` into microservice or distributed-system builds.
 
 ## Core Capabilities
 
@@ -36,13 +36,15 @@ microservices orchestration layer - without the need to use an external/third-pa
 
 - Load configuration from TOML files and `APP__` environment variable overrides.
 
+- Protect registry routes with a shared mesh token for internal service-to-service access.
+
 - Emit structured JSON logs through `tracing`.
 
 - More...
 
 ## Architecture
 
-Rusty Mesh follows a standard rust service build structure that is intended to be both clean and
+Rusty Mesh follows a standard Rust service build structure that is intended to be both clean and
 maintainable. Below is a breakdown for more context:
 
 ```text
@@ -87,6 +89,7 @@ policy always leaves room for missed or delayed heartbeats before an instance is
 - Rust `1.85+`
 - Cargo
 - Docker, optional, for containerized runs
+- `cargo-watch`, optional, for `cargo dev`
 
 ## Quick Start
 
@@ -102,11 +105,14 @@ git clone https://github.com/okpainmo/rusty-mesh.git
 cp .env.sample .env
 ```
 
-> The main `.env` file simply serves the sole purpose of declaring the current working/deployment environment. Depending on the selected environment, secrets are pulled in from the three(3) environment specific `.env` files. Three(3) environments are supported: `development`, `staging`, and `production`. 
+> The main `.env` file selects the working/deployment environment with `APP__DEPLOY__ENV`. Depending
+> on that value, runtime environment values are loaded from one of the environment-specific files.
+> Three environments are supported: `development`, `staging`, and `production`.
 >
->In the main `.env`, simply uncomment the preferred environment then leave the rest commented.
+> In the main `.env`, simply uncomment the preferred environment then leave the rest commented.
 
-3. Copy in the environment specific .env files to the root of the project, and equally update as necessary:
+3. Copy in the environment-specific `.env` files to the root of the project, and equally update as
+   necessary:
 
 ```bash
 cp .env.development.sample .env.development
@@ -120,7 +126,8 @@ cp .env.production.sample .env.production
 cargo dev
 ```
 
-> `cargo dev` is an alias for the `cargo run` command. It uses `cargo-watch` to run the server in watch/development mode. 
+> `cargo dev` uses `cargo-watch` to run the server in watch/development mode. If `cargo-watch` is
+> not installed, run `cargo install cargo-watch` or use `cargo run`.
 
 By default, development mode starts the server at:
 
@@ -154,15 +161,27 @@ Expected response:
 ### Mesh Security
 
 Registry routes are protected by a shared mesh token. Send it as a Bearer token on register,
-discover, list, and unregister requests. It should be provided in the demo-microservices `.env` file as below:
+discover, list, and unregister requests.
+
+For the mesh server itself, set the token through the active environment file:
+
+```bash
+APP__SECURITY__MESH_TOKEN=<mesh-token>
+```
+
+For demo services, set the matching client-facing token in `demo-microservices/.env`:
 
 ```bash
 MESH_TOKEN=<mesh-token>
 ```
 
+The health endpoint remains public so container platforms and load balancers can check liveness
+without holding the mesh token.
+
 ## Docker
 
-`Rusty Mesh` includes a standalone Docker setup. As intended, the mesh service itself is built to be plugged into any distributed system of choice - after which it's build can then be wired into the central `docker-compose` setup.
+`Rusty Mesh` includes a standalone Docker setup. The mesh service image can be plugged into any
+distributed system of choice, then wired into that system's central Compose or orchestration setup.
 
 Build the image:
 
@@ -218,6 +237,8 @@ All endpoints are nested under:
 | DELETE | `/services`                                                 | Unregister an instance                                     |
 | GET    | `/services/{service_name}/{service_version}`                | Find a compatible instance with round-robin load balancing |
 | GET    | `/services/{service_name}/{service_version}/{service_port}` | Find a compatible instance on a specific port              |
+
+`/health` is public. All `/services` routes require the shared mesh token.
 
 ### Register A Service
 
@@ -281,8 +302,8 @@ Response:
 }
 ```
 
-> **When multiple active instances match, Rusty Mesh sorts the candidates by name, version, IP address,
-and port, then returns them in round-robin order on repeated requests**.
+> **When multiple active instances match, Rusty Mesh sorts the candidates by name, version, IP
+> address, and port, then returns them in round-robin order on repeated requests**.
 
 ### Find A Service On A Specific Port
 
@@ -387,7 +408,13 @@ across compatible instances.
 
 ## Configuration
 
-Configuration is loaded in this order, from lowest to highest priority:
+Environment files are loaded before configuration is deserialized:
+
+1. `.env`
+2. `.env.{APP__DEPLOY__ENV}`, for example `.env.development`
+
+The config loader then resolves application configuration in this order, from lowest to highest
+priority:
 
 1. `config/base.toml`
 2. `config/{APP__ENV}.toml`
@@ -405,7 +432,7 @@ Default values live in [config/base.toml](config/base.toml).
 | `APP__REGISTRY__HEARTBEAT_INTERVAL_SECS` | Expected service heartbeat interval | `5`            |
 | `APP__REGISTRY__SERVICE_TTL_SECS`        | Service registration TTL            | `15`           |
 | `APP__SECURITY__REQUIRE_MESH_TOKEN`      | Require token on registry routes    | `true`         |
-| `APP__SECURITY__MESH_TOKEN`              | Shared registry access token        | required       |
+| `APP__SECURITY__MESH_TOKEN`              | Shared registry access token        | env override   |
 | `APP__APP__NAME`                         | Service name in health response     | `mesh_service` |
 
 Example:
@@ -420,7 +447,7 @@ cargo run
 
 Set `APP__SECURITY__REQUIRE_MESH_TOKEN=false` only for isolated local debugging. Production and
 shared environments should keep token enforcement enabled and provide a strong secret through the
-environment.
+active environment file.
 
 The heartbeat interval must be lower than the TTL. For example, a `10` second heartbeat with a `30`
 second TTL gives each service roughly three heartbeat opportunities before it is removed from
@@ -456,6 +483,7 @@ The test suite covers:
 - Unregistering a service.
 - Cleaning up expired services.
 - Rejecting invalid service versions.
+- Rejecting missing or invalid mesh authentication tokens on registry routes.
 - Exercising the HTTP health, register, find, and unregister routes.
 
 Run all tests:
@@ -468,13 +496,17 @@ cargo test
 
 - Registry state is in memory and is lost when the process restarts.
 - There is no multi-node replication.
-- There is no authentication or authorization layer yet.
+- Registry routes are protected by a shared mesh token. This is a lightweight service-to-service
+  boundary, not per-service identity, RBAC, mTLS, or end-user authorization.
+- Keep `APP__SECURITY__REQUIRE_MESH_TOKEN=true` outside isolated local debugging, and set
+  `APP__SECURITY__MESH_TOKEN` from the active environment file or deployment secret store.
+- The health endpoint is intentionally public for container health checks and load balancers.
 - Service advertised-host detection prefers `x-mesh-advertise-host`, falls back to
   `x-forwarded-for`, and finally uses localhost.
 
 These constraints define the first production-facing shape of the service. They keep the registry
 straightforward to operate while leaving a clear path toward persistent storage, replication,
-authentication, and richer mesh routing layers.
+service identity, mTLS, and richer mesh routing layers - as the case may be with your needs.
 
 ## License
 
