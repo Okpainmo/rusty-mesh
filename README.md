@@ -7,16 +7,13 @@ Rusty Mesh is a fast in-memory orchestration layer for microservice/distributed 
 services a focused HTTP control plane for registration, heartbeat-based liveness, semantic version
 matching, health checks, and sorted round-robin load balancing across compatible instances.
 
-Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want service discovery they
-can run locally, ship in containers, and reason about without pulling in an external database on day
-one. The API and internal structure leave a clear path toward persistent or distributed backends as
-deployment needs grow.
+Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their microservices orchestration layer - without the need to use an external/third-party control plane. 
 
 > The project's main focus is the mesh(orchestrator) service. But for easy onboarding, included, is
 > a [demo-microservices directory](./demo-microservices) with four(4) demo
 > microservices(`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
-> `catalog-service - rust`) that use the orchestrator, and would help to clearly guide engineering
-> teams with integrating `rusty-mesh` into their microservices/distributed systems builds.
+> `catalog-service - rust`) that utilizes the mesh, and would help to clearly guide engineering
+> teams on how to integrate `rusty-mesh` into their microservices/distributed systems builds.
 
 ## Core Capabilities
 
@@ -40,9 +37,11 @@ deployment needs grow.
 
 - Emit structured JSON logs through `tracing`.
 
+- More...
+
 ## Architecture
 
-Rusty Mesh follows the same application shape used by the sibling Rust services in this workspace:
+Rusty Mesh follows a standard rust service build structure that is intended to be both clean and maintainable. Below is a breakdown for more context:
 
 ```text
 src/
@@ -53,7 +52,7 @@ src/
     controllers/registry/  # HTTP handlers
     services/registry/     # registry domain logic
     structs/               # request/response domain structs
-  middlewares/             # logging and timeout middleware
+  middlewares/             # logging, mesh-auth, and timeout middleware
   utils/                   # environment and config loading
 ```
 
@@ -92,7 +91,9 @@ policy always leaves room for missed or delayed heartbeats before an instance is
 Run the service locally:
 
 ```bash
-APP__ENV=development cargo run
+APP__ENV=development \
+APP__SECURITY__MESH_TOKEN=local-dev-mesh-token \
+cargo run
 ```
 
 By default, development mode starts the server at:
@@ -124,6 +125,13 @@ Expected response:
 }
 ```
 
+Registry routes are protected by a shared mesh token. Send it as a Bearer token on register,
+discover, list, and unregister requests:
+
+```bash
+MESH_TOKEN=local-dev-mesh-token
+```
+
 ## Docker
 
 Rusty Mesh includes a standalone Docker setup. The repository `compose.yaml` is intentionally not
@@ -138,7 +146,10 @@ docker build -t rusty-mesh .
 Run the container:
 
 ```bash
-docker run --rm -p 3080:3080 rusty-mesh
+docker run --rm \
+  -p 3080:3080 \
+  -e APP__SECURITY__MESH_TOKEN=local-dev-mesh-token \
+  rusty-mesh
 ```
 
 The Docker image defaults to:
@@ -149,6 +160,7 @@ APP__SERVER__HOST=0.0.0.0
 APP__SERVER__PORT=3080
 APP__REGISTRY__HEARTBEAT_INTERVAL_SECS=5
 APP__REGISTRY__SERVICE_TTL_SECS=15
+APP__SECURITY__REQUIRE_MESH_TOKEN=true
 ```
 
 Override runtime configuration when needed:
@@ -159,6 +171,7 @@ docker run --rm \
   -e APP__SERVER__PORT=4080 \
   -e APP__REGISTRY__HEARTBEAT_INTERVAL_SECS=10 \
   -e APP__REGISTRY__SERVICE_TTL_SECS=30 \
+  -e APP__SECURITY__MESH_TOKEN=replace-with-a-strong-token \
   rusty-mesh
 ```
 
@@ -183,7 +196,8 @@ All endpoints are nested under:
 
 ```bash
 curl -X POST \
-  -H "x-forwarded-for: 10.0.0.20" \
+  -H "authorization: Bearer ${MESH_TOKEN}" \
+  -H "x-mesh-advertise-host: 10.0.0.20" \
   -H "content-type: application/json" \
   -d '{
     "service_name": "orders",
@@ -220,7 +234,8 @@ Semantic-version requirements are supported through the `semver` crate. Because 
 `^` are special in URLs, encode them in request paths.
 
 ```bash
-curl http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0
+curl -H "authorization: Bearer ${MESH_TOKEN}" \
+  http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0
 ```
 
 Response:
@@ -248,7 +263,8 @@ The original port-specific lookup remains available when a client needs to targe
 registered port:
 
 ```bash
-curl http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0/3000
+curl -H "authorization: Bearer ${MESH_TOKEN}" \
+  http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0/3000
 ```
 
 If no compatible service is found:
@@ -267,7 +283,8 @@ If no compatible service is found:
 ### List Services
 
 ```bash
-curl http://127.0.0.1:3080/api/v1/mesh/services
+curl -H "authorization: Bearer ${MESH_TOKEN}" \
+  http://127.0.0.1:3080/api/v1/mesh/services
 ```
 
 Response:
@@ -294,7 +311,8 @@ Response:
 
 ```bash
 curl -X DELETE \
-  -H "x-forwarded-for: 10.0.0.20" \
+  -H "authorization: Bearer ${MESH_TOKEN}" \
+  -H "x-mesh-advertise-host: 10.0.0.20" \
   -H "content-type: application/json" \
   -d '{
     "service_name": "orders",
@@ -359,16 +377,23 @@ Default values live in [config/base.toml](config/base.toml).
 | `APP__SERVER__REQUEST_TIMEOUT_SECS`      | Request timeout in seconds          | `60`           |
 | `APP__REGISTRY__HEARTBEAT_INTERVAL_SECS` | Expected service heartbeat interval | `5`            |
 | `APP__REGISTRY__SERVICE_TTL_SECS`        | Service registration TTL            | `15`           |
+| `APP__SECURITY__REQUIRE_MESH_TOKEN`      | Require token on registry routes    | `true`         |
+| `APP__SECURITY__MESH_TOKEN`              | Shared registry access token        | required       |
 | `APP__APP__NAME`                         | Service name in health response     | `mesh_service` |
 
 Example:
 
 ```bash
 APP__ENV=development \
+APP__SECURITY__MESH_TOKEN=replace-with-a-strong-token \
 APP__REGISTRY__HEARTBEAT_INTERVAL_SECS=10 \
 APP__REGISTRY__SERVICE_TTL_SECS=30 \
 cargo run
 ```
+
+Set `APP__SECURITY__REQUIRE_MESH_TOKEN=false` only for isolated local debugging. Production and
+shared environments should keep token enforcement enabled and provide a strong secret through the
+environment.
 
 The heartbeat interval must be lower than the TTL. For example, a `10` second heartbeat with a `30`
 second TTL gives each service roughly three heartbeat opportunities before it is removed from
@@ -417,7 +442,8 @@ cargo test
 - Registry state is in memory and is lost when the process restarts.
 - There is no multi-node replication.
 - There is no authentication or authorization layer yet.
-- Service IP detection currently prefers `x-forwarded-for` and falls back to localhost.
+- Service advertised-host detection prefers `x-mesh-advertise-host`, falls back to
+  `x-forwarded-for`, and finally uses localhost.
 
 These constraints define the first production-facing shape of the service. They keep the registry
 straightforward to operate while leaving a clear path toward persistent storage, replication,
