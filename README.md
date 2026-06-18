@@ -7,7 +7,8 @@ Rusty Mesh is a fast in-memory orchestration layer for microservice/distributed 
 services a focused HTTP control plane for registration, heartbeat-based liveness, semantic version
 matching, health checks, and sorted round-robin load balancing across compatible instances.
 
-Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their microservices orchestration layer - without the need to use an external/third-party control plane. 
+Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their
+microservices orchestration layer - without the need to use an external/third-party control plane.
 
 > The project's main focus is the mesh(orchestrator) service. But for easy onboarding, included, is
 > a [demo-microservices directory](./demo-microservices) with four(4) demo
@@ -41,7 +42,8 @@ Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want ful
 
 ## Architecture
 
-Rusty Mesh follows a standard rust service build structure that is intended to be both clean and maintainable. Below is a breakdown for more context:
+Rusty Mesh follows a standard rust service build structure that is intended to be both clean and
+maintainable. Below is a breakdown for more context:
 
 ```text
 src/
@@ -88,13 +90,37 @@ policy always leaves room for missed or delayed heartbeats before an instance is
 
 ## Quick Start
 
-Run the service locally:
+1. Clone the repository:
 
 ```bash
-APP__ENV=development \
-APP__SECURITY__MESH_TOKEN=local-dev-mesh-token \
-cargo run
+git clone https://github.com/okpainmo/rusty-mesh.git
 ```
+
+2. Copy over the `.env.sample` file to `.env` and update the values as needed:
+
+```bash
+cp .env.sample .env
+```
+
+> The main `.env` file simply serves the sole purpose of declaring the current working/deployment environment. Depending on the selected environment, secrets are pulled in from the three(3) environment specific `.env` files. Three(3) environments are supported: `development`, `staging`, and `production`. 
+>
+>In the main `.env`, simply uncomment the preferred environment then leave the rest commented.
+
+3. Copy in the environment specific .env files to the root of the project, and equally update as necessary:
+
+```bash
+cp .env.development.sample .env.development
+cp .env.staging.sample .env.staging
+cp .env.production.sample .env.production
+```
+
+4. Run the mesh server locally:
+
+```bash
+cargo dev
+```
+
+> `cargo dev` is an alias for the `cargo run` command. It uses `cargo-watch` to run the server in watch/development mode. 
 
 By default, development mode starts the server at:
 
@@ -125,17 +151,18 @@ Expected response:
 }
 ```
 
+### Mesh Security
+
 Registry routes are protected by a shared mesh token. Send it as a Bearer token on register,
-discover, list, and unregister requests:
+discover, list, and unregister requests. It should be provided in the demo-microservices `.env` file as below:
 
 ```bash
-MESH_TOKEN=local-dev-mesh-token
+MESH_TOKEN=<mesh-token>
 ```
 
 ## Docker
 
-Rusty Mesh includes a standalone Docker setup. The repository `compose.yaml` is intentionally not
-required for running the mesh service by itself.
+`Rusty Mesh` includes a standalone Docker setup. As intended, the mesh service itself is built to be plugged into any distributed system of choice - after which it's build can then be wired into the central `docker-compose` setup.
 
 Build the image:
 
@@ -148,7 +175,7 @@ Run the container:
 ```bash
 docker run --rm \
   -p 3080:3080 \
-  -e APP__SECURITY__MESH_TOKEN=local-dev-mesh-token \
+  -e APP__SECURITY__MESH_TOKEN=<add-mesh-token> \
   rusty-mesh
 ```
 
@@ -254,8 +281,8 @@ Response:
 }
 ```
 
-When multiple active instances match, Rusty Mesh sorts the candidates by name, version, IP address,
-and port, then returns them in round-robin order on repeated requests.
+> **When multiple active instances match, Rusty Mesh sorts the candidates by name, version, IP address,
+and port, then returns them in round-robin order on repeated requests**.
 
 ### Find A Service On A Specific Port
 
