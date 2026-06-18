@@ -39,6 +39,7 @@ Each service understands these environment variables:
 | Variable                  | Default                 | Purpose                              |
 | ------------------------- | ----------------------- | ------------------------------------ |
 | `MESH_URL`                | `http://127.0.0.1:3080` | Rusty Mesh base URL                  |
+| `MESH_TOKEN`              | unset                   | Shared token for protected mesh API  |
 | `SERVICE_NAME`            | service-specific        | Service name registered with mesh    |
 | `SERVICE_VERSION`         | `1.0.0`                 | Service semantic version             |
 | `SERVICE_BIND_HOST`       | `127.0.0.1`             | Host/interface the service binds to  |
@@ -91,6 +92,18 @@ Request body:
 }
 ```
 
+All registry requests send the shared mesh token as:
+
+```http
+Authorization: Bearer <MESH_TOKEN>
+```
+
+Registration and unregistration also send the reachable service host through:
+
+```http
+x-mesh-advertise-host: <SERVICE_ADVERTISE_HOST>
+```
+
 Load-balanced discovery:
 
 ```http
@@ -105,21 +118,17 @@ GET /api/v1/mesh/services/{service_name}/{service_version}/{service_port}
 
 ## Run The Demo
 
-Start Rusty Mesh first from the repository root:
+The fastest way to run the complete demo is Docker Compose. The Compose stack already includes
+Rusty Mesh, so you do not need to start the mesh service separately.
 
 ```bash
-APP__ENV=development cargo run
+cp .env.sample .env
+COMPOSE_BAKE=true docker compose up -d --build
 ```
 
-Then start any demo service in another terminal.
-
-## Run All Services With Docker Compose
-
-From this directory:
-
-```bash
-docker compose up -d --build
-```
+The first build still downloads and compiles dependencies. Later builds are faster because the
+Dockerfiles cache Rust, Node, and Python dependency downloads separately from application source
+changes.
 
 The compose setup starts:
 
@@ -135,24 +144,69 @@ host, such as `user-service-1` or `cart-service-2`.
 List everything registered with the mesh:
 
 ```bash
-curl http://127.0.0.1:3080/api/v1/mesh/services
+curl -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
+  http://127.0.0.1:3080/api/v1/mesh/services
 ```
 
-Call a service's peer-demo endpoint from inside the Compose network:
+## Call Services Inside Docker
+
+The demo services are intentionally not published to host ports. Call them from inside the Compose
+network after discovering their registered host and port from Rusty Mesh.
+
+First, discover a load-balanced service instance from inside the Docker network:
 
 ```bash
-docker compose run --rm --entrypoint python cart-service-1 -c '
-import json, urllib.request
-services = json.loads(urllib.request.urlopen("http://rusty-mesh:3080/api/v1/mesh/services").read())["response"]["services"]
-service = next(item for item in services if item["name"] == "user-service")
-url = "http://{}:{}/call-catalog-service".format(service["ip"], service["port"])
-print(urllib.request.urlopen(url).read().decode())
-'
+docker run --rm --network rusty-mesh-demo-net curlimages/curl:8.8.0 -sS \
+  -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
+  http://rusty-mesh:3080/api/v1/mesh/services/user-service/%5E1.0.0
+```
+
+The response includes the selected instance's `ip` and `port`. Use those values in the next curl.
+For example, if discovery returns `user-service-1` and port `45783`:
+
+```bash
+docker run --rm --network rusty-mesh-demo-net curlimages/curl:8.8.0 -sS \
+  http://user-service-1:45783/health
+```
+
+You can call the demo peer endpoint the same way:
+
+```bash
+docker run --rm --network rusty-mesh-demo-net curlimages/curl:8.8.0 -sS \
+  http://user-service-1:45783/call-catalog-service
+```
+
+To see every registered service instance and choose a specific one:
+
+```bash
+docker run --rm --network rusty-mesh-demo-net curlimages/curl:8.8.0 -sS \
+  -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
+  http://rusty-mesh:3080/api/v1/mesh/services
 ```
 
 For ad hoc extra capacity, add another service entry to `compose.yaml` with the same build context
 and a unique `SERVICE_ADVERTISE_HOST`, or run that service's Docker image separately with the same
 mesh network and a distinct advertised host.
+
+## Run Individual Services Manually
+
+Use this mode only when you want to run one demo service directly from its own folder instead of
+running the full Compose stack. In manual mode, start Rusty Mesh first from the repository root:
+
+```bash
+APP__DEPLOY__ENV=development \
+APP__SECURITY__MESH_TOKEN=local-demo-mesh-token \
+cargo run
+```
+
+Then start any demo service in another terminal. Make sure the service uses the same mesh token:
+
+```bash
+export MESH_URL=http://127.0.0.1:3080
+export MESH_TOKEN=local-demo-mesh-token
+export SERVICE_BIND_HOST=127.0.0.1
+export SERVICE_ADVERTISE_HOST=127.0.0.1
+```
 
 ### Rust: user-service
 
@@ -167,6 +221,7 @@ Build and run it individually with Docker:
 docker build -t demo-user-service .
 docker run --rm --network host \
   -e MESH_URL=http://127.0.0.1:3080 \
+  -e MESH_TOKEN=local-demo-mesh-token \
   -e SERVICE_BIND_HOST=127.0.0.1 \
   -e SERVICE_ADVERTISE_HOST=127.0.0.1 \
   demo-user-service
@@ -185,6 +240,7 @@ Build and run it individually with Docker:
 docker build -t demo-catalog-service .
 docker run --rm --network host \
   -e MESH_URL=http://127.0.0.1:3080 \
+  -e MESH_TOKEN=local-demo-mesh-token \
   -e SERVICE_BIND_HOST=127.0.0.1 \
   -e SERVICE_ADVERTISE_HOST=127.0.0.1 \
   demo-catalog-service
@@ -206,6 +262,7 @@ Build and run it individually with Docker:
 docker build -t demo-order-service .
 docker run --rm --network host \
   -e MESH_URL=http://127.0.0.1:3080 \
+  -e MESH_TOKEN=local-demo-mesh-token \
   -e SERVICE_BIND_HOST=127.0.0.1 \
   -e SERVICE_ADVERTISE_HOST=127.0.0.1 \
   demo-order-service
@@ -227,6 +284,7 @@ Build and run it individually with Docker:
 docker build -t demo-cart-service .
 docker run --rm --network host \
   -e MESH_URL=http://127.0.0.1:3080 \
+  -e MESH_TOKEN=local-demo-mesh-token \
   -e SERVICE_BIND_HOST=127.0.0.1 \
   -e SERVICE_ADVERTISE_HOST=127.0.0.1 \
   demo-cart-service
@@ -237,13 +295,15 @@ docker run --rm --network host \
 List registered services:
 
 ```bash
-curl http://127.0.0.1:3080/api/v1/mesh/services
+curl -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
+  http://127.0.0.1:3080/api/v1/mesh/services
 ```
 
 Find a specific service using the dynamic port from either its startup log or the list response:
 
 ```bash
-curl http://127.0.0.1:3080/api/v1/mesh/services/user-service/%5E1.0.0/<dynamic-port>
+curl -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
+  http://127.0.0.1:3080/api/v1/mesh/services/user-service/%5E1.0.0/<dynamic-port>
 ```
 
 Stop a service with `Ctrl+C`, then list services again. The service should unregister during

@@ -221,6 +221,85 @@ docker run --rm \
   rusty-mesh
 ```
 
+## Integrating Into A Microservice Project
+
+If you want Rusty Mesh inside an existing microservice workspace, add it as one service in your
+parent repository's services directory.
+
+Move into the parent services directory:
+
+```bash
+cd <microservice-services-dir>
+```
+
+Clone the mesh service with the folder name you want to use in the parent project:
+
+```bash
+git clone --single-branch --branch main https://github.com/Okpainmo/rusty-mesh <preferred-mesh-service-name>
+cd <preferred-mesh-service-name>
+```
+
+Remove the Git history so the mesh service becomes part of the parent project:
+
+```bash
+rm -rf .git
+```
+
+Keep the runtime files that make Rusty Mesh a service:
+
+```text
+src/
+config/
+Cargo.toml
+Cargo.lock
+Dockerfile
+.dockerignore
+.env.sample
+.env.development.sample
+.env.staging.sample
+.env.production.sample
+```
+
+Keep `.cargo/config.toml` only if you want the local `cargo dev` watch alias inside the parent
+workspace.
+
+Remove repository-only or demo-only files if your parent project already owns those concerns:
+
+```bash
+rm -rf \
+  .github \
+  .husky \
+  .codex \
+  .vscode \
+  demo-microservices \
+  CHANGELOG.md \
+  CODE_OF_CONDUCT.md \
+  CONTRIBUTING.md \
+  SECURITY.md \
+  commitlint.config.mjs \
+  package.json \
+  bun.lock \
+  prettier.config.mjs
+```
+
+You can also remove `README.md` and `LICENSE` if the parent repository already provides project-wide
+documentation and licensing. Keep them if the mesh service should remain documented as its own
+standalone unit inside the parent repo.
+
+Even inside a broader microservice project, keep Rusty Mesh configured as an independent service.
+Set its own `.env` or deployment environment values from the samples, especially
+`APP__SECURITY__MESH_TOKEN`. Every internal service that registers with Rusty Mesh should receive
+the matching client-side token and use it when calling registry routes:
+
+```http
+Authorization: Bearer <shared-mesh-token>
+x-mesh-advertise-host: <reachable-service-host>
+```
+
+The parent Compose, Kubernetes, or deployment system should start Rusty Mesh before or alongside
+services that depend on discovery. `/api/v1/mesh/health` stays public for health checks, while all
+`/api/v1/mesh/services...` routes require the shared mesh token.
+
 ## API Reference
 
 All endpoints are nested under:
