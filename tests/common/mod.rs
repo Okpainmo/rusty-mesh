@@ -1,11 +1,14 @@
 use axum::{body::to_bytes, response::Response};
 use mesh::core::services::registry::registry_store::RegistryStore;
 use mesh::utils::load_config::{
-    AppConfig, AppSection, ClientIntegrationsSection, RegistrySection, ServerSection,
+    AppConfig, AppSection, ClientIntegrationsSection, RegistrySection, SecuritySection,
+    ServerSection,
 };
 use mesh::{AppState, create_app};
 use serde_json::Value;
 use std::sync::Arc;
+
+pub const TEST_MESH_TOKEN: &str = "test-mesh-token";
 
 pub fn test_state() -> AppState {
     AppState {
@@ -26,6 +29,10 @@ pub fn test_state() -> AppState {
             registry: RegistrySection {
                 heartbeat_interval_secs: 5,
                 service_ttl_secs: 15,
+            },
+            security: SecuritySection {
+                require_mesh_token: true,
+                mesh_token: Some(TEST_MESH_TOKEN.to_string()),
             },
         }),
         registry: RegistryStore::new(15),

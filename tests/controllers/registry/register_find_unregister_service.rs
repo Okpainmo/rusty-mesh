@@ -1,4 +1,4 @@
-use crate::common::{response_json, test_app};
+use crate::common::{TEST_MESH_TOKEN, response_json, test_app};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -16,6 +16,7 @@ async fn register_find_and_unregister_service() {
             Request::builder()
                 .method("POST")
                 .uri("/api/v1/mesh/services")
+                .header("authorization", format!("Bearer {}", TEST_MESH_TOKEN))
                 .header("x-forwarded-for", "10.0.0.20")
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -46,6 +47,7 @@ async fn register_find_and_unregister_service() {
         .oneshot(
             Request::builder()
                 .uri("/api/v1/mesh/services/orders/%5E1.0.0/3000")
+                .header("authorization", format!("Bearer {}", TEST_MESH_TOKEN))
                 .body(Body::empty())
                 .expect("request should build"),
         )
@@ -68,6 +70,7 @@ async fn register_find_and_unregister_service() {
             Request::builder()
                 .method("DELETE")
                 .uri("/api/v1/mesh/services")
+                .header("authorization", format!("Bearer {}", TEST_MESH_TOKEN))
                 .header("x-forwarded-for", "10.0.0.20")
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -99,6 +102,7 @@ async fn register_find_and_unregister_service() {
         .oneshot(
             Request::builder()
                 .uri("/api/v1/mesh/services/orders/%5E1.0.0/3000")
+                .header("authorization", format!("Bearer {}", TEST_MESH_TOKEN))
                 .body(Body::empty())
                 .expect("request should build"),
         )
@@ -128,6 +132,7 @@ async fn find_service_without_port_round_robins_across_instances() {
                 Request::builder()
                     .method("POST")
                     .uri("/api/v1/mesh/services")
+                    .header("authorization", format!("Bearer {}", TEST_MESH_TOKEN))
                     .header("x-forwarded-for", ip)
                     .header("content-type", "application/json")
                     .body(Body::from(
@@ -154,6 +159,7 @@ async fn find_service_without_port_round_robins_across_instances() {
             .oneshot(
                 Request::builder()
                     .uri("/api/v1/mesh/services/orders/%5E1.0.0")
+                    .header("authorization", format!("Bearer {}", TEST_MESH_TOKEN))
                     .body(Body::empty())
                     .expect("request should build"),
             )

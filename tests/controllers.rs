@@ -7,6 +7,9 @@ mod health;
 #[path = "controllers/registry/register_find_unregister_service.rs"]
 mod register_find_unregister_service;
 
+#[path = "controllers/registry/mesh_auth.rs"]
+mod mesh_auth;
+
 #[path = "controllers/registry/register_rejects_invalid_request_body.rs"]
 mod register_rejects_invalid_request_body;
 

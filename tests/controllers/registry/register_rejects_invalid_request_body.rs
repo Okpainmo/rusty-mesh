@@ -1,4 +1,4 @@
-use crate::common::{response_json, test_app};
+use crate::common::{TEST_MESH_TOKEN, response_json, test_app};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -15,6 +15,7 @@ async fn register_rejects_invalid_request_body() {
             Request::builder()
                 .method("POST")
                 .uri("/api/v1/mesh/services")
+                .header("authorization", format!("Bearer {}", TEST_MESH_TOKEN))
                 .header("content-type", "application/json")
                 .body(Body::from("{}"))
                 .expect("request should build"),
