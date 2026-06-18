@@ -1,4 +1,7 @@
 /target
+**/target
+**/__pycache__
+**/.venv
 /.git
 /.github
 /.cargo
