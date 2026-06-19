@@ -4,7 +4,7 @@ FROM rust:1.85-bookworm AS builder
 
 WORKDIR /app
 
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 RUN --mount=type=cache,id=demo-catalog-cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=demo-catalog-cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=demo-catalog-target,target=/app/target \
@@ -39,5 +39,7 @@ ENV SERVICE_BIND_HOST=0.0.0.0
 ENV SERVICE_PORT=0
 ENV MESH_URL=http://rusty-mesh:3080
 ENV HEARTBEAT_INTERVAL_SECS=5
+
+EXPOSE 30303
 
 CMD ["demo-catalog-service"]
