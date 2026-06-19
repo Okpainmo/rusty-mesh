@@ -1,8 +1,8 @@
 use axum::{body::to_bytes, response::Response};
 use mesh::core::services::registry::registry_store::RegistryStore;
 use mesh::utils::load_config::{
-    AppConfig, AppSection, ClientIntegrationsSection, RegistrySection, SecuritySection,
-    ServerSection,
+    AppConfig, AppSection, ClientIntegrationsSection, ExternalEndpointResolution, RegistrySection,
+    SecuritySection, ServerSection,
 };
 use mesh::{AppState, create_app};
 use serde_json::Value;
@@ -29,6 +29,8 @@ pub fn test_state() -> AppState {
             registry: RegistrySection {
                 heartbeat_interval_secs: 5,
                 service_ttl_secs: 15,
+                public_host: None,
+                external_endpoint_resolution: ExternalEndpointResolution::None,
             },
             security: SecuritySection {
                 require_mesh_token: true,
