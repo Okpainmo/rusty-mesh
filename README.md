@@ -227,9 +227,9 @@ APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=<mode>
 
 Available modes:
 
-| Mode     | Behavior                                                                                        | Production posture                        |
-| -------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `none`   | Do not inspect Docker or any platform API. Use explicit external endpoint fields when provided. | Default and safest baseline               |
+| Mode     | Behavior                                                                                        | Production posture                                  |
+| -------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `none`   | Do not inspect Docker or any platform API. Use explicit external endpoint fields when provided. | Default and safest baseline                         |
 | `docker` | Inspect the registering Docker container to resolve the host port mapped to its internal port.  | Opt-in; requires a trusted control-plane deployment |
 
 The default is `none`.
