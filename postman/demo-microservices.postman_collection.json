@@ -1,0 +1,321 @@
+{
+  "info": {
+    "_postman_id": "36a7053f-14a0-465f-acaa-82587bedb7d2",
+    "name": "rusty-mesh__demo-microservices",
+    "description": "Postman collection for the Rusty Mesh demo microservices.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "25201008"
+  },
+  "item": [
+    {
+      "name": "cart",
+      "item": [
+        {
+          "name": "Welcome",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{cart_service_base_url}}/",
+              "host": [
+                "{{cart_service_base_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{cart_service_base_url}}/health",
+              "host": [
+                "{{cart_service_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Cart Feedback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{cart_service_base_url}}/get-cart-feedback",
+              "host": [
+                "{{cart_service_base_url}}"
+              ],
+              "path": [
+                "get-cart-feedback"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Call Order Service",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{cart_service_base_url}}/call-order-service",
+              "host": [
+                "{{cart_service_base_url}}"
+              ],
+              "path": [
+                "call-order-service"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "catalog",
+      "item": [
+        {
+          "name": "Welcome",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{catalog_service_base_url}}/",
+              "host": [
+                "{{catalog_service_base_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{catalog_service_base_url}}/health",
+              "host": [
+                "{{catalog_service_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Catalog Feedback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{catalog_service_base_url}}/get-catalog-feedback",
+              "host": [
+                "{{catalog_service_base_url}}"
+              ],
+              "path": [
+                "get-catalog-feedback"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Call Cart Service",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{catalog_service_base_url}}/call-cart-service",
+              "host": [
+                "{{catalog_service_base_url}}"
+              ],
+              "path": [
+                "call-cart-service"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "order",
+      "item": [
+        {
+          "name": "Welcome",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_base_url}}/",
+              "host": [
+                "{{order_service_base_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_base_url}}/health",
+              "host": [
+                "{{order_service_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order Feedback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_base_url}}/get-order-feedback",
+              "host": [
+                "{{order_service_base_url}}"
+              ],
+              "path": [
+                "get-order-feedback"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Call User Service",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_base_url}}/call-user-service",
+              "host": [
+                "{{order_service_base_url}}"
+              ],
+              "path": [
+                "call-user-service"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "user",
+      "item": [
+        {
+          "name": "Welcome",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{user_service_base_url}}/",
+              "host": [
+                "{{user_service_base_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{user_service_base_url}}/health",
+              "host": [
+                "{{user_service_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Feedback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{user_service_base_url}}/get-user-feedback",
+              "host": [
+                "{{user_service_base_url}}"
+              ],
+              "path": [
+                "get-user-feedback"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Call Catalog Service",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{user_service_base_url}}/call-catalog-service",
+              "host": [
+                "{{user_service_base_url}}"
+              ],
+              "path": [
+                "call-catalog-service"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "cart_service_base_url",
+      "value": "http://127.0.0.1:30302"
+    },
+    {
+      "key": "catalog_service_base_url",
+      "value": "http://127.0.0.1:30303"
+    },
+    {
+      "key": "order_service_base_url",
+      "value": "http://127.0.0.1:30304"
+    },
+    {
+      "key": "user_service_base_url",
+      "value": "http://127.0.0.1:30301"
+    }
+  ]
+}

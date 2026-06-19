@@ -1,0 +1,339 @@
+{
+  "info": {
+    "_postman_id": "d16096b9-6a62-4f90-8814-3e9b468ad7f2",
+    "name": "rusty-mesh__core",
+    "description": "Postman collection for Rusty Mesh mesh-core endpoints under /api/v1/mesh.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "25201008"
+  },
+  "item": [
+    {
+      "name": "health",
+      "item": [
+        {
+          "name": "Welcome",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mesh_core_base_url}}",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ]
+            },
+            "description": "Public mesh welcome/status endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mesh_core_base_url}}/health",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Public mesh health endpoint."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "registry",
+      "item": [
+        {
+          "name": "Register Service",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.response) {",
+                  "  pm.collectionVariables.set('external_port', String(body.response.port));",
+                  "  pm.collectionVariables.set('external_host', body.response.ip);",
+                  "  pm.collectionVariables.set('internal_port', String(body.response.internal_port));",
+                  "  pm.collectionVariables.set('internal_host', body.response.internal_ip);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-mesh-advertise-host",
+                "value": "{{internal_host}}"
+              },
+              {
+                "key": "x-mesh-container-id",
+                "value": "{{container_id}}",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_name\": \"{{service_name}}\",\n  \"service_version\": \"{{service_version}}\",\n  \"service_ip\": \"{{internal_host}}\",\n  \"service_port\": {{internal_port}},\n  \"external_host\": \"{{external_host}}\",\n  \"external_port\": {{external_port}},\n  \"external_scheme\": \"{{external_scheme}}\"\n}"
+            },
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services"
+              ]
+            },
+            "description": "Register or refresh a service instance."
+          },
+          "response": []
+        },
+        {
+          "name": "Heartbeat Service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-mesh-advertise-host",
+                "value": "{{internal_host}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_name\": \"{{service_name}}\",\n  \"service_version\": \"{{service_version}}\",\n  \"service_ip\": \"{{internal_host}}\",\n  \"service_port\": {{internal_port}}\n}"
+            },
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services/heartbeat",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services",
+                "heartbeat"
+              ]
+            },
+            "description": "Refresh a registered service lease using its internal identity."
+          },
+          "response": []
+        },
+        {
+          "name": "Heartbeat Service By External Identity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_name\": \"{{service_name}}\",\n  \"service_version\": \"{{service_version}}\",\n  \"service_ip\": \"{{external_host}}\",\n  \"service_port\": {{external_port}}\n}"
+            },
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services/heartbeat",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services",
+                "heartbeat"
+              ]
+            },
+            "description": "Refresh a registered service lease using its external identity."
+          },
+          "response": []
+        },
+        {
+          "name": "List Services",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services"
+              ]
+            },
+            "description": "List active services."
+          },
+          "response": []
+        },
+        {
+          "name": "Find Service - Load Balanced",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services/{{service_name}}/{{service_version_requirement}}",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services",
+                "{{service_name}}",
+                "{{service_version_requirement}}"
+              ]
+            },
+            "description": "Find a compatible service by name and semantic-version requirement."
+          },
+          "response": []
+        },
+        {
+          "name": "Find Service - External Port",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services/{{service_name}}/{{service_version_requirement}}/{{external_port}}",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services",
+                "{{service_name}}",
+                "{{service_version_requirement}}",
+                "{{external_port}}"
+              ]
+            },
+            "description": "Find a compatible service on a specific lookup port."
+          },
+          "response": []
+        },
+        {
+          "name": "Find Service - Internal Response Scope",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-mesh-endpoint-scope",
+                "value": "internal"
+              }
+            ],
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services/{{service_name}}/{{service_version_requirement}}/{{external_port}}",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services",
+                "{{service_name}}",
+                "{{service_version_requirement}}",
+                "{{external_port}}"
+              ]
+            },
+            "description": "Find a service by external lookup port, but return its internal network endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Unregister Service",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-mesh-advertise-host",
+                "value": "{{internal_host}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_name\": \"{{service_name}}\",\n  \"service_version\": \"{{service_version}}\",\n  \"service_ip\": \"{{internal_host}}\",\n  \"service_port\": {{internal_port}}\n}"
+            },
+            "url": {
+              "raw": "{{mesh_core_base_url}}/services",
+              "host": [
+                "{{mesh_core_base_url}}"
+              ],
+              "path": [
+                "services"
+              ]
+            },
+            "description": "Unregister a service instance by internal identity."
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{mesh_token}}",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "mesh_core_base_url",
+      "value": "http://127.0.0.1:3080/api/v1/mesh"
+    },
+    {
+      "key": "mesh_token",
+      "value": "local-demo-mesh-token"
+    },
+    {
+      "key": "service_name",
+      "value": "orders"
+    },
+    {
+      "key": "service_version",
+      "value": "1.2.3"
+    },
+    {
+      "key": "service_version_requirement",
+      "value": "%5E1.0.0"
+    },
+    {
+      "key": "internal_host",
+      "value": "10.0.0.20"
+    },
+    {
+      "key": "internal_port",
+      "value": "3000"
+    },
+    {
+      "key": "external_host",
+      "value": "orders.example.com"
+    },
+    {
+      "key": "external_port",
+      "value": "443"
+    },
+    {
+      "key": "external_scheme",
+      "value": "https"
+    },
+    {
+      "key": "container_id",
+      "value": ""
+    }
+  ]
+}
