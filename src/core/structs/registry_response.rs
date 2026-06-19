@@ -1,4 +1,4 @@
-use crate::core::structs::service_instance::ServiceInstance;
+use crate::core::structs::service_instance::ServiceEndpointResponse;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -47,8 +47,11 @@ where
 pub struct ServiceRegistrationResponse {
     pub service_name: String,
     pub service_version: String,
-    pub service_ip: String,
-    pub service_port: u16,
+    pub ip: String,
+    pub port: u16,
+    pub internal_ip: String,
+    pub internal_port: u16,
+    pub url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -59,6 +62,15 @@ pub struct HealthResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct WelcomeResponse {
+    pub service: String,
+    pub status: String,
+    pub message: String,
+    pub health_url: String,
+    pub registry_url: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct RegistryPolicyResponse {
     pub heartbeat_interval_secs: u64,
     pub service_ttl_secs: u64,
@@ -66,5 +78,7 @@ pub struct RegistryPolicyResponse {
 
 #[derive(Debug, Serialize)]
 pub struct ServicesResponse {
-    pub services: Vec<ServiceInstance>,
+    #[serde(rename = "services-count")]
+    pub services_count: usize,
+    pub services: Vec<ServiceEndpointResponse>,
 }

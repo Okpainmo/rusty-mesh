@@ -13,7 +13,7 @@ use axum::{
     response::IntoResponse,
 };
 
-pub async fn unregister_service(
+pub async fn heartbeat_service(
     State(state): State<AppState>,
     headers: HeaderMap,
     payload: Result<Json<ServiceRegistrationRequest>, JsonRejection>,
@@ -24,7 +24,7 @@ pub async fn unregister_service(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(ApiResponse::<ServiceRegistrationResponse>::error(
-                    format!("Invalid service unregistration request body: {}", error),
+                    format!("Invalid service heartbeat request body: {}", error),
                     "INVALID_REQUEST_BODY",
                 )),
             )
@@ -41,17 +41,17 @@ pub async fn unregister_service(
 
     match state
         .registry
-        .unregister(service_name, service_version, service_ip, service_port)
+        .heartbeat(service_name, service_version, service_ip, service_port)
         .await
     {
         Ok(service) => {
-            let unregister_response = unregister_response(&service);
+            let heartbeat_response = heartbeat_response(&service);
 
             (
                 StatusCode::OK,
                 Json(ApiResponse::success(
-                    "Service unregistered successfully",
-                    unregister_response,
+                    "Service heartbeat refreshed successfully",
+                    heartbeat_response,
                 )),
             )
                 .into_response()
@@ -83,7 +83,7 @@ pub async fn unregister_service(
     }
 }
 
-fn unregister_response(service: &ServiceInstance) -> ServiceRegistrationResponse {
+fn heartbeat_response(service: &ServiceInstance) -> ServiceRegistrationResponse {
     let external_endpoint =
         service
             .external_ip

@@ -3,6 +3,7 @@
 //! Core router setup, state management, and middleware integration for the
 //! in-memory mesh service registry.
 
+use crate::core::controllers::health::health::welcome;
 use crate::core::router::mesh_routes;
 use crate::core::services::registry::registry_store::RegistryStore;
 use crate::middlewares::logging_middleware::logging_middleware;
@@ -30,6 +31,7 @@ pub struct AppState {
 /// routing style used across the Rust services.
 pub fn create_app(state: AppState) -> Router {
     Router::new()
+        .route("/", axum::routing::get(welcome))
         .nest("/api/v1/mesh", mesh_routes(&state))
         .layer(middleware::from_fn(logging_middleware))
         .layer(middleware::from_fn_with_state(
