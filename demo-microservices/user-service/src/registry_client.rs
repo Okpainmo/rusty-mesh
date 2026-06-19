@@ -14,6 +14,10 @@ pub struct MeshRegistryClient {
     service_name: String,
     service_version: String,
     service_port: u16,
+    container_id: Option<String>,
+    external_host: Option<String>,
+    external_port: Option<u16>,
+    external_scheme: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -21,6 +25,21 @@ struct ServiceRegistrationRequest<'a> {
     service_name: &'a str,
     service_version: &'a str,
     service_port: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    external_host: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    external_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    external_scheme: Option<&'a str>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct EndpointDetails {
+    pub ip: String,
+    pub port: u16,
+    pub internal_ip: String,
+    pub internal_port: u16,
+    pub url: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -43,6 +62,10 @@ impl MeshRegistryClient {
         service_name: impl Into<String>,
         service_version: impl Into<String>,
         service_port: u16,
+        container_id: Option<String>,
+        external_host: Option<String>,
+        external_port: Option<u16>,
+        external_scheme: impl Into<String>,
     ) -> Self {
         Self {
             http: Client::new(),
@@ -54,39 +77,72 @@ impl MeshRegistryClient {
             service_name: service_name.into(),
             service_version: service_version.into(),
             service_port,
+            container_id: container_id
+                .map(|id| id.trim().to_string())
+                .filter(|id| !id.is_empty()),
+            external_host: external_host
+                .map(|host| host.trim().to_string())
+                .filter(|host| !host.is_empty()),
+            external_port,
+            external_scheme: external_scheme.into(),
         }
     }
 
-    pub async fn register(&self) -> Result<()> {
-        self.authorized(
+    pub async fn register(&self) -> Result<EndpointDetails> {
+        self.send_registry_request(
             self.http
                 .post(format!("{}/api/v1/mesh/services", self.mesh_url)),
+            "registration",
         )
-        .header("x-mesh-advertise-host", self.advertised_host.as_str())
-        .json(&self.registration_body())
-        .send()
         .await
-        .context("failed to send service registration request")?
-        .error_for_status()
-        .context("mesh rejected service registration request")?;
+        .and_then(|response| response.context("mesh service registration response was empty"))
+    }
 
-        Ok(())
+    pub async fn heartbeat(&self) -> Result<()> {
+        self.send_registry_request(
+            self.http
+                .post(format!("{}/api/v1/mesh/services/heartbeat", self.mesh_url)),
+            "heartbeat",
+        )
+        .await
+        .map(|_| ())
     }
 
     pub async fn unregister(&self) -> Result<()> {
-        self.authorized(
+        self.send_registry_request(
             self.http
                 .delete(format!("{}/api/v1/mesh/services", self.mesh_url)),
+            "unregistration",
         )
-        .header("x-mesh-advertise-host", self.advertised_host.as_str())
-        .json(&self.registration_body())
-        .send()
         .await
-        .context("failed to send service unregistration request")?
-        .error_for_status()
-        .context("mesh rejected service unregistration request")?;
+        .map(|_| ())
+    }
 
-        Ok(())
+    async fn send_registry_request(
+        &self,
+        request: reqwest::RequestBuilder,
+        action: &str,
+    ) -> Result<Option<EndpointDetails>> {
+        let mut request = self
+            .authorized(request)
+            .header("x-mesh-advertise-host", self.advertised_host.as_str());
+        if let Some(container_id) = self.container_id.as_deref() {
+            request = request.header("x-mesh-container-id", container_id);
+        }
+
+        let response = request
+            .json(&self.registration_body())
+            .send()
+            .await
+            .with_context(|| format!("failed to send service {action} request"))?
+            .error_for_status()
+            .with_context(|| format!("mesh rejected service {action} request"))?
+            .json::<MeshResponse<EndpointDetails>>()
+            .await
+            .with_context(|| format!("failed to decode service {action} response"))?
+            .response;
+
+        Ok(response)
     }
 
     pub async fn discover(&self, service_name: &str) -> Result<ServiceInstance> {
@@ -98,6 +154,7 @@ impl MeshRegistryClient {
                 "{}/api/v1/mesh/services/{}/{}",
                 self.mesh_url, service_name, encoded_requirement
             )))
+            .header("x-mesh-endpoint-scope", "internal")
             .send()
             .await
             .context("failed to request mesh service discovery")?
@@ -139,9 +196,9 @@ impl MeshRegistryClient {
             loop {
                 interval.tick().await;
 
-                if let Err(error) = client.register().await {
+                if let Err(error) = client.heartbeat().await {
                     eprintln!(
-                        "{}:{} heartbeat registration failed: {error:#}",
+                        "{}:{} heartbeat failed: {error:#}",
                         client.service_name, client.service_version
                     );
                 }
@@ -150,10 +207,27 @@ impl MeshRegistryClient {
     }
 
     fn registration_body(&self) -> ServiceRegistrationRequest<'_> {
+        let has_external_endpoint = self.external_host.is_some() && self.external_port.is_some();
+
         ServiceRegistrationRequest {
             service_name: &self.service_name,
             service_version: &self.service_version,
             service_port: self.service_port,
+            external_host: if has_external_endpoint {
+                self.external_host.as_deref()
+            } else {
+                None
+            },
+            external_port: if has_external_endpoint {
+                self.external_port
+            } else {
+                None
+            },
+            external_scheme: if has_external_endpoint {
+                Some(self.external_scheme.as_str())
+            } else {
+                None
+            },
         }
     }
 
