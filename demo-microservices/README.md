@@ -8,7 +8,7 @@ Each microservice:
 
 - binds to the configured service port, or a dynamic OS-assigned port when `SERVICE_PORT=0`
 - registers the actual assigned port with the registry after the server starts
-- refreshes its registered lease on a separate heartbeat endpoint
+- refreshes its registered lease on the dedicated heartbeat endpoint
 - unregisters during graceful shutdown where the runtime supports it
 
 ## Services
@@ -245,11 +245,13 @@ First, discover a load-balanced service instance from inside the Docker network:
 ```bash
 docker run --rm --network rusty-mesh-demo-net curlimages/curl:8.8.0 -sS \
   -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
+  -H "x-mesh-endpoint-scope: internal" \
   http://rusty-mesh:3080/api/v1/mesh/services/user-service/%5E1.0.0
 ```
 
-The response includes the selected instance's `ip` and `port`. Use those values in the next curl.
-For example, if discovery returns `user-service-1` and port `30301`:
+The internal endpoint-scope header makes the response use the selected instance's Docker DNS name
+and internal port. Use those values in the next curl. For example, if discovery returns
+`user-service-1` and port `30301`:
 
 ```bash
 docker run --rm --network rusty-mesh-demo-net curlimages/curl:8.8.0 -sS \
@@ -268,6 +270,7 @@ To see every registered service instance and choose a specific one:
 ```bash
 docker run --rm --network rusty-mesh-demo-net curlimages/curl:8.8.0 -sS \
   -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
+  -H "x-mesh-endpoint-scope: internal" \
   http://rusty-mesh:3080/api/v1/mesh/services
 ```
 
@@ -386,7 +389,8 @@ curl -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \
   http://127.0.0.1:3080/api/v1/mesh/services
 ```
 
-Find a specific service using the dynamic port from either its startup log or the list response:
+Find a specific service using the public port from the list response. For manually run services
+without an external endpoint, this is the same dynamic port printed in that service's startup log:
 
 ```bash
 curl -H "authorization: Bearer ${MESH_TOKEN:-local-demo-mesh-token}" \

@@ -10,11 +10,11 @@ matching, health checks, and sorted round-robin load balancing across compatible
 Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their
 microservices orchestration layer without needing an external or third-party control plane.
 
-> The project's main focus is the mesh/orchestrator service. But for easier onboarding, the
-> repository also includes a [demo-microservices directory](./demo-microservices) with four demo
-> microservices (`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
+> The project's main focus is the mesh/orchestrator layer. But for easier onboarding, the repository
+> also includes a [demo-microservices directory](./demo-microservices) with four demo microservices
+> (`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
 > `catalog-service - rust`) that use the mesh and show how engineering teams can integrate
-> `rusty-mesh` into microservice or distributed-system builds.
+> `rusty-mesh` into their microservice builds.
 
 ## Table Of Contents
 
@@ -48,7 +48,7 @@ microservices orchestration layer without needing an external or third-party con
 
 - Register service instances by name, semantic version, IP address, and port.
 
-- Refresh an existing registration by calling the register endpoint again.
+- Refresh service leases through the dedicated heartbeat endpoint or by re-registering.
 
 - Unregister service instances explicitly.
 
@@ -102,14 +102,16 @@ instance stores:
 - `ip`
 - `port`
 - `timestamp`
+- optional external endpoint metadata: `external_ip`, `external_port`, and `external_scheme`
 
-Expired entries are removed during register, find, and list operations. **Load-balanced discovery
-sorts matching instances by name, version, IP address, and port, then returns the next instance
-using a round-robin cursor for that service and version requirement**.
+Expired entries are removed during register, heartbeat, unregister, find, and list operations.
+**Load-balanced discovery sorts matching instances by name, version, registered internal IP address,
+and registered internal port, then returns the next instance using a round-robin cursor for that
+service and version requirement**.
 
 Rusty Mesh treats service registration as a heartbeat-driven contract. Registered services should
-refresh their registration before `registry.service_ttl_secs` elapses. Startup validation enforces
-that `registry.heartbeat_interval_secs` is lower than `registry.service_ttl_secs`, so the configured
+refresh their lease before `registry.service_ttl_secs` elapses. Startup validation enforces that
+`registry.heartbeat_interval_secs` is lower than `registry.service_ttl_secs`, so the configured
 policy always leaves room for missed or delayed heartbeats before an instance is considered stale.
 
 ## Requirements
@@ -135,7 +137,7 @@ cp .env.sample .env
 
 ### Environment Selection
 
-> The `.env` file exist solely to help selects the working/deployment environment with
+> The `.env` file exists solely to select the working/deployment environment with
 > `APP__DEPLOY__ENV`. Depending on that value, runtime environment values are loaded from one of the
 > environment-specific files. Three environments are supported: `development`, `staging`, and
 > `production`.
@@ -211,13 +213,11 @@ without holding the mesh token.
 
 ## External Endpoint Resolution
 
-By default, Rusty Mesh utilizes internal docker DNS resolution, hence `podlets`(running non-mesh
-services) should not be reachable externally. However, it can also store externally reachable
-endpoints for operator-facing discovery responses. **This matters a lot when autoscaling is being
-prioritized. I.e. when multiple instances of the same service share one stable internal port while
-the deployment platform(as enforced by Rusty Mesh) assigns dynamic host ports for each replica. And
-also when external access to all services is mandatory.**. Continue reading to
-[learn more](#docker-resolver).
+By default, Rusty Mesh only needs the internal endpoint a service registers with. It can also store
+an externally reachable endpoint for operator-facing discovery responses. **This matters when
+multiple instances of the same service share one stable internal port while the deployment platform
+assigns dynamic host ports for each replica, or when host-side access to each service instance is
+required.** Continue reading to [learn more in the docker resolver section](#docker-resolver).
 
 External endpoint resolution is explicit and controlled by:
 
@@ -653,8 +653,14 @@ Response:
 }
 ```
 
+For service-to-service calls that should stay on the private network, send
+`x-mesh-endpoint-scope: internal`. In that mode, discovery returns the raw registered instance, so
+`ip` and `port` are the internal registered endpoint and any resolved external endpoint remains in
+the optional `external_ip`, `external_port`, and `external_scheme` fields.
+
 > **When multiple active instances match, Rusty Mesh sorts the candidates by name, version, IP
-> address, and port, then returns them in round-robin order on repeated requests**.
+> address, and port using the registered internal endpoint, then returns them in round-robin order
+> on repeated requests**.
 
 ### Find A Service On A Specific External Port
 
@@ -735,17 +741,17 @@ Response:
   "response": {
     "service_name": "orders",
     "service_version": "1.2.3",
-    "ip": "10.0.0.20",
-    "port": 3000,
+    "ip": "orders.example.com",
+    "port": 443,
     "internal_ip": "10.0.0.20",
     "internal_port": 3000,
-    "url": "http://10.0.0.20:3000"
+    "url": "https://orders.example.com:443"
   },
   "error": null
 }
 ```
 
-If the service instance is not registered:
+If the service instance is not registered, Rusty Mesh returns HTTP `404`:
 
 ```json
 {
@@ -856,13 +862,14 @@ cargo fmt --check
 The test suite covers:
 
 - Registering a service.
-- Refreshing an existing service registration.
+- Refreshing an existing service lease through heartbeat.
 - Finding a compatible semantic version.
 - Unregistering a service.
+- Returning `404` when unregistering a service instance that does not exist.
 - Cleaning up expired services.
 - Rejecting invalid service versions.
 - Rejecting missing or invalid mesh authentication tokens on registry routes.
-- Exercising the HTTP health, register, find, and unregister routes.
+- Exercising the HTTP health, register, heartbeat, find, and unregister routes.
 
 Run all tests:
 
