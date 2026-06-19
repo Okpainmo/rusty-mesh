@@ -10,9 +10,13 @@ services:
       APP__SERVER__PORT: 3080
       APP__REGISTRY__HEARTBEAT_INTERVAL_SECS: 5
       APP__REGISTRY__SERVICE_TTL_SECS: 15
+      APP__REGISTRY__PUBLIC_HOST: ${MESH_PUBLIC_HOST:-127.0.0.1}
+      APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION: docker
       APP__SECURITY__MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
     ports:
       - "3080:3080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   user-service-1:
     image: rusty-mesh-demo-user-service:latest
@@ -22,8 +26,11 @@ services:
       SERVICE_NAME: user-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: user-service-1
+      SERVICE_PORT: 30301
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30301"
     depends_on:
       - rusty-mesh
 
@@ -35,8 +42,11 @@ services:
       SERVICE_NAME: user-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: user-service-2
+      SERVICE_PORT: 30301
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30301"
     depends_on:
       - rusty-mesh
 
@@ -48,8 +58,11 @@ services:
       SERVICE_NAME: catalog-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: catalog-service-1
+      SERVICE_PORT: 30303
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30303"
     depends_on:
       - rusty-mesh
 
@@ -61,8 +74,11 @@ services:
       SERVICE_NAME: catalog-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: catalog-service-2
+      SERVICE_PORT: 30303
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30303"
     depends_on:
       - rusty-mesh
 
@@ -74,8 +90,11 @@ services:
       SERVICE_NAME: order-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: order-service-1
+      SERVICE_PORT: 30304
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30304"
     depends_on:
       - rusty-mesh
 
@@ -87,8 +106,11 @@ services:
       SERVICE_NAME: order-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: order-service-2
+      SERVICE_PORT: 30304
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30304"
     depends_on:
       - rusty-mesh
 
@@ -100,8 +122,11 @@ services:
       SERVICE_NAME: cart-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: cart-service-1
+      SERVICE_PORT: 30302
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30302"
     depends_on:
       - rusty-mesh
 
@@ -113,8 +138,11 @@ services:
       SERVICE_NAME: cart-service
       SERVICE_BIND_HOST: 0.0.0.0
       SERVICE_ADVERTISE_HOST: cart-service-2
+      SERVICE_PORT: 30302
       MESH_URL: http://rusty-mesh:3080
       MESH_TOKEN: ${MESH_TOKEN:-local-demo-mesh-token}
+    ports:
+      - "30302"
     depends_on:
       - rusty-mesh
 
