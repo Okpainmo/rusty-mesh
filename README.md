@@ -3,15 +3,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-Rusty Mesh is a fast in-memory orchestration layer for microservice/distributed systems. It provides a focused HTTP control plane for service registration, heartbeat-based liveness, semantic version
+Rusty Mesh is a fast in-memory orchestration layer for microservice/distributed systems. It provides
+a focused HTTP control plane for service registration, heartbeat-based liveness, semantic version
 matching, health checks, and sorted round-robin load balancing across compatible instances.
 
 Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their
 microservices orchestration layer without needing an external or third-party control plane.
 
-> The project's main focus is the mesh/orchestrator service. But for easier onboarding, the repository
-> also includes a [demo-microservices directory](./demo-microservices) with four demo microservices
-> (`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
+> The project's main focus is the mesh/orchestrator service. But for easier onboarding, the
+> repository also includes a [demo-microservices directory](./demo-microservices) with four demo
+> microservices (`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
 > `catalog-service - rust`) that use the mesh and show how engineering teams can integrate
 > `rusty-mesh` into microservice or distributed-system builds.
 
@@ -106,8 +107,10 @@ cp .env.sample .env
 
 ### Environment Selection
 
-> The `.env` file exist solely to help selects the working/deployment environment with `APP__DEPLOY__ENV`. Depending on that value, runtime environment values are loaded from one of the environment-specific files.
-> Three environments are supported: `development`, `staging`, and `production`.
+> The `.env` file exist solely to help selects the working/deployment environment with
+> `APP__DEPLOY__ENV`. Depending on that value, runtime environment values are loaded from one of the
+> environment-specific files. Three environments are supported: `development`, `staging`, and
+> `production`.
 >
 > In the main `.env`, simply uncomment the preferred environment then leave the rest commented.
 
@@ -180,7 +183,13 @@ without holding the mesh token.
 
 ## External Endpoint Resolution
 
-By default, Rusty Mesh utilizes internal docker DNS resolution, hence `podlets`(running non-mesh services) should not be reachable externally. However, it can also store externally reachable endpoints for operator-facing discovery responses. **This matters a lot when autoscaling is being prioritized. I.e. when multiple instances of the same service share one stable internal port while the deployment platform(as enforced by Rusty Mesh) assigns dynamic host ports for each replica. And also when external access to all services is mandatory.**. Continue reading to [learn more](#docker-resolver).
+By default, Rusty Mesh utilizes internal docker DNS resolution, hence `podlets`(running non-mesh
+services) should not be reachable externally. However, it can also store externally reachable
+endpoints for operator-facing discovery responses. **This matters a lot when autoscaling is being
+prioritized. I.e. when multiple instances of the same service share one stable internal port while
+the deployment platform(as enforced by Rusty Mesh) assigns dynamic host ports for each replica. And
+also when external access to all services is mandatory.**. Continue reading to
+[learn more](#docker-resolver).
 
 External endpoint resolution is explicit and controlled by:
 
@@ -202,8 +211,9 @@ Resolution priority is:
 1. Use explicit external endpoint fields from the registration request.
 
 2. If no explicit endpoint fields are supplied and the resolver mode is `docker`, inspect Docker.
- 
-3. On discovery response, if no external endpoint can be resolved, fall back to the internal registered endpoint.
+
+3. On discovery response, if no external endpoint can be resolved, fall back to the internal
+   registered endpoint.
 
 ### Explicit External Registration
 
@@ -288,20 +298,25 @@ published service URL from the host.
 
 Mounting `/var/run/docker.sock` into a container is powerful. Even when mounted read-only at the
 filesystem level, the Docker Engine API can expose sensitive container, network, image, and runtime
-metadata. Treat Docker socket access as privileged infrastructure access and **ensure to only use it in production when you have proper security installations in place**.
+metadata. Treat Docker socket access as privileged infrastructure access and **ensure to only use it
+in production when you have proper security installations in place**.
 
-Rusty Mesh uses the socket only when `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker`. In that mode it inspects the registering container and resolves the host port mapped to the registered
-internal port. 
+Rusty Mesh uses the socket only when `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker`. In that
+mode it inspects the registering container and resolves the host port mapped to the registered
+internal port.
 
 You might prefer to use one of these safer options in production:
 
-- Keep `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=none` and have services register their externally reachable host and port directly when the deployment platform provides them.
+- Keep `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=none` and have services register their
+  externally reachable host and port directly when the deployment platform provides them.
 
-- Put Rusty Mesh behind the same orchestrator or service-discovery layer as the services and use internal endpoints only.
+- Put Rusty Mesh behind the same orchestrator or service-discovery layer as the services and use
+  internal endpoints only.
 
 - Use a restricted sidecar or proxy that exposes only the small inspect data Rusty Mesh needs.
 
-- In Kubernetes(if Rusty Mesh ever applies), use pod/service metadata from the Kubernetes API instead of Docker socket access.
+- In Kubernetes(if Rusty Mesh ever applies), use pod/service metadata from the Kubernetes API
+  instead of Docker socket access.
 
 ## Docker
 
@@ -349,7 +364,8 @@ docker run --rm \
 
 ## Integrating Into A Microservice Project
 
-If you want Rusty Mesh inside an existing microservice workspace, simply add it as a standalone service in your parent repository's microservices directory.
+If you want Rusty Mesh inside an existing microservice workspace, simply add it as a standalone
+service in your parent repository's microservices directory.
 
 Move into the parent services directory:
 
@@ -739,7 +755,8 @@ across compatible instances.
 
 All environment variables files are loaded before configuration is deserialized:
 
-1. `.env` - in which the current working environment is selected - [as earlier described](#environment-selection).
+1. `.env` - in which the current working environment is selected -
+   [as earlier described](#environment-selection).
 
 2. `.env.{APP__DEPLOY__ENV}`, for example `.env.development`
 
@@ -827,15 +844,23 @@ cargo test
 
 ## Operational Notes
 
-- **Registry state is in-memory** and is lost when the process restarts. This design is intentional as it keeps the system simple, focused, highly performant, and flexible enough to permit customized scaling/extending. A reasonable area(in terms of extending the current system) that comes to mind is adding data persistence via a queue(background jobs), which will be triggered after every successful service registration/de-registration.
+- **Registry state is in-memory** and is lost when the process restarts. This design is intentional
+  as it keeps the system simple, focused, highly performant, and flexible enough to permit
+  customized scaling/extending. A reasonable area(in terms of extending the current system) that
+  comes to mind is adding data persistence via a queue(background jobs), which will be triggered
+  after every successful service registration/de-registration.
 
-- **There is no multi-node replication**. As it stands, deploying multiple instances of Rusty Mesh remains to be handled as you see fit. A very good way to utilize Rusty Mesh, will be to treat it's deployment as `pods` - similar to Kubernetes. With each pod consisting of a Rusty Mesh copy, and `podlets` - other non-mesh services. Of course, this does not prevent individual service scaling for cases where only specific `podlets` should be added for load balancing.
+- **There is no multi-node replication**. As it stands, deploying multiple instances of Rusty Mesh
+  remains to be handled as you see fit. A very good way to utilize Rusty Mesh, will be to treat it's
+  deployment as `pods` - similar to Kubernetes. With each pod consisting of a Rusty Mesh copy, and
+  `podlets` - other non-mesh services. Of course, this does not prevent individual service scaling
+  for cases where only specific `podlets` should be added for load balancing.
 
-- Registry routes are protected by a shared mesh token. This is a lightweight service-to-service boundary, not per-service identity, RBAC, mTLS, or end-user authorization.
+- Registry routes are protected by a shared mesh token. This is a lightweight service-to-service
+  boundary, not per-service identity, RBAC, mTLS, or end-user authorization.
 
 - Keep `APP__SECURITY__REQUIRE_MESH_TOKEN=true` outside isolated local debugging, and set
   `APP__SECURITY__MESH_TOKEN` from the active environment file or deployment secret store.
-  
 - The health endpoint is intentionally public for container health checks and load balancers.
 - Service advertised-host detection prefers `x-mesh-advertise-host`, falls back to
   `x-forwarded-for`, and finally uses localhost.
