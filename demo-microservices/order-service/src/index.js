@@ -11,6 +11,12 @@ const serviceAdvertiseHost =
 const requestedPort = Number.parseInt(process.env.SERVICE_PORT || "0", 10);
 const meshUrl = process.env.MESH_URL || "http://127.0.0.1:3080";
 const meshToken = (process.env.MESH_TOKEN || "").trim() || null;
+const serviceExternalHost =
+  (process.env.SERVICE_EXTERNAL_HOST || "").trim() || null;
+const serviceExternalPort =
+  Number.parseInt(process.env.SERVICE_EXTERNAL_PORT || "", 10) || null;
+const serviceExternalScheme =
+  (process.env.SERVICE_EXTERNAL_SCHEME || "http").trim() || "http";
 const heartbeatIntervalSecs = Number.parseInt(
   process.env.HEARTBEAT_INTERVAL_SECS || "5",
   10
@@ -22,13 +28,41 @@ const server = createServer(app);
 let registryClient = null;
 let heartbeat = null;
 let cleaned = false;
+let registeredEndpoint = {};
+
+function endpointDetails() {
+  const internalIp = registeredEndpoint.internal_ip || serviceAdvertiseHost;
+  const internalPort = registeredEndpoint.internal_port || server.address()?.port || requestedPort;
+  const ip = registeredEndpoint.ip || internalIp;
+  const port = registeredEndpoint.port || internalPort;
+
+  return {
+    ip,
+    port,
+    internal_ip: internalIp,
+    internal_port: internalPort,
+    url: registeredEndpoint.url || `http://${ip}:${port}`
+  };
+}
+
+app.get("/", (req, res) => {
+  res.json({
+    service: serviceName,
+    version: serviceVersion,
+    status: "ok",
+    message: `${serviceName} is running and registered with Rusty Mesh.`,
+    health_url: "/health",
+    feedback_url: "/get-order-feedback",
+    ...endpointDetails()
+  });
+});
 
 app.get("/health", (req, res) => {
   res.json({
     service: serviceName,
     version: serviceVersion,
     status: "ok",
-    port: server.address().port
+    ...endpointDetails()
   });
 });
 
@@ -36,6 +70,7 @@ app.get("/get-order-feedback", (req, res) => {
   res.json({
     service: serviceName,
     message: "Order service says the demo order is ready",
+    ...endpointDetails(),
     data: {
       order_id: "order-1001",
       status: "ready",
@@ -57,6 +92,7 @@ app.get("/call-user-service", async (req, res) => {
     res.json({
       service: serviceName,
       called_service: calledService,
+      ...endpointDetails(),
       peer_response: peerResponse
     });
   } catch (error) {
@@ -87,7 +123,7 @@ async function cleanup() {
 async function registerUntilReady() {
   for (;;) {
     try {
-      await registryClient.register();
+      registeredEndpoint = await registryClient.register();
       return;
     } catch (error) {
       console.error(`${serviceName}:${serviceVersion} initial registration failed`, error);
@@ -105,7 +141,11 @@ server.listen(requestedPort, serviceBindHost, async () => {
     serviceAdvertiseHost,
     serviceName,
     serviceVersion,
-    servicePort: port
+    servicePort: port,
+    containerId: process.env.HOSTNAME || null,
+    externalHost: serviceExternalHost,
+    externalPort: serviceExternalPort,
+    externalScheme: serviceExternalScheme
   });
 
   await registerUntilReady();
