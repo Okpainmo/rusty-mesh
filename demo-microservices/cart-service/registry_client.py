@@ -14,6 +14,10 @@ class MeshRegistryClient:
     service_name: str
     service_version: str
     service_port: int
+    container_id: str | None = None
+    external_host: str | None = None
+    external_port: int | None = None
+    external_scheme: str | None = None
 
     @property
     def services_url(self) -> str:
@@ -21,12 +25,18 @@ class MeshRegistryClient:
 
     @property
     def body(self) -> bytes:
+        payload = {
+            "service_name": self.service_name,
+            "service_version": self.service_version,
+            "service_port": self.service_port,
+        }
+        if self.external_host and self.external_port:
+            payload["external_host"] = self.external_host
+            payload["external_port"] = self.external_port
+            payload["external_scheme"] = self.external_scheme or "http"
+
         return json.dumps(
-            {
-                "service_name": self.service_name,
-                "service_version": self.service_version,
-                "service_port": self.service_port,
-            }
+            payload
         ).encode("utf-8")
 
     @property
@@ -36,11 +46,16 @@ class MeshRegistryClient:
 
         return {}
 
-    async def register(self) -> None:
-        await asyncio.to_thread(self._send, "POST")
+    async def register(self) -> dict:
+        return await asyncio.to_thread(self._send, "POST", self.services_url)
+
+    async def heartbeat(self) -> None:
+        await asyncio.to_thread(
+            self._send, "POST", f"{self.services_url}/heartbeat"
+        )
 
     async def unregister(self) -> None:
-        await asyncio.to_thread(self._send, "DELETE")
+        await asyncio.to_thread(self._send, "DELETE", self.services_url)
 
     async def discover(self, service_name: str) -> dict:
         return await asyncio.to_thread(self._discover, service_name)
@@ -52,21 +67,22 @@ class MeshRegistryClient:
         while True:
             await asyncio.sleep(heartbeat_interval_secs)
             try:
-                await self.register()
+                await self.heartbeat()
             except Exception as error:
                 print(
                     f"{self.service_name}:{self.service_version} heartbeat failed: {error}",
                     flush=True,
                 )
 
-    def _send(self, method: str) -> None:
+    def _send(self, method: str, url: str) -> dict:
         request = urllib.request.Request(
-            self.services_url,
+            url,
             data=self.body,
             method=method,
             headers={
                 "content-type": "application/json",
                 "x-mesh-advertise-host": self.service_advertise_host,
+                **self.container_headers,
                 **self.auth_headers,
             },
         )
@@ -75,18 +91,26 @@ class MeshRegistryClient:
             with urllib.request.urlopen(request, timeout=5) as response:
                 if response.status >= 400:
                     raise RuntimeError(
-                        f"{method} registration failed with status {response.status}"
+                        f"{method} registry request failed with status {response.status}"
                     )
+                payload = json.loads(response.read().decode("utf-8"))
+                return payload.get("response") or {}
         except urllib.error.HTTPError as error:
             details = error.read().decode("utf-8")
             raise RuntimeError(
-                f"{method} registration failed with status {error.code}: {details}"
+                f"{method} registry request failed with status {error.code}: {details}"
             ) from error
 
     def _discover(self, service_name: str) -> dict:
         version_requirement = quote("^1.0.0", safe="")
         url = f"{self.services_url}/{service_name}/{version_requirement}"
-        request = urllib.request.Request(url, headers=self.auth_headers)
+        request = urllib.request.Request(
+            url,
+            headers={
+                "x-mesh-endpoint-scope": "internal",
+                **self.auth_headers,
+            },
+        )
 
         with urllib.request.urlopen(request, timeout=5) as response:
             payload = json.loads(response.read().decode("utf-8"))
@@ -108,3 +132,10 @@ class MeshRegistryClient:
             raise RuntimeError(
                 f"feedback call to {service.get('name')}{path} failed with status {error.code}: {details}"
             ) from error
+
+    @property
+    def container_headers(self) -> dict[str, str]:
+        if self.container_id:
+            return {"x-mesh-container-id": self.container_id}
+
+        return {}

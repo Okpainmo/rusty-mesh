@@ -17,4 +17,6 @@ ENV SERVICE_PORT=0
 ENV MESH_URL=http://rusty-mesh:3080
 ENV HEARTBEAT_INTERVAL_SECS=5
 
+EXPOSE 30302
+
 CMD ["python", "main.py"]
