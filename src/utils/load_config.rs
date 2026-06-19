@@ -37,6 +37,15 @@ pub struct ServerSection {
 pub struct RegistrySection {
     pub heartbeat_interval_secs: u64,
     pub service_ttl_secs: u64,
+    pub public_host: Option<String>,
+    pub external_endpoint_resolution: ExternalEndpointResolution,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExternalEndpointResolution {
+    None,
+    Docker,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -183,6 +192,8 @@ mod tests {
             registry: RegistrySection {
                 heartbeat_interval_secs: 5,
                 service_ttl_secs: 15,
+                public_host: None,
+                external_endpoint_resolution: ExternalEndpointResolution::None,
             },
             security: SecuritySection {
                 require_mesh_token: true,
