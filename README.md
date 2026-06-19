@@ -16,6 +16,34 @@ microservices orchestration layer without needing an external or third-party con
 > `catalog-service - rust`) that use the mesh and show how engineering teams can integrate
 > `rusty-mesh` into microservice or distributed-system builds.
 
+## Table Of Contents
+
+- [Core Capabilities](#core-capabilities)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+  - [Environment Selection](#environment-selection)
+  - [Mesh Security](#mesh-security)
+- [External Endpoint Resolution](#external-endpoint-resolution)
+  - [Explicit External Registration](#explicit-external-registration)
+  - [Docker Resolver](#docker-resolver)
+  - [Docker Socket Security](#docker-socket-security)
+- [Docker](#docker)
+- [Integrating Into A Microservice Project](#integrating-into-a-microservice-project)
+- [API Reference](#api-reference)
+  - [Postman Collections](#postman-collections)
+  - [Register A Service](#register-a-service)
+  - [Find A Service With Load Balancing](#find-a-service-with-load-balancing)
+  - [Find A Service On A Specific External Port](#find-a-service-on-a-specific-external-port)
+  - [List Services](#list-services)
+  - [Unregister A Service](#unregister-a-service)
+- [Service Discovery Semantics](#service-discovery-semantics)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Testing](#testing)
+- [Operational Notes](#operational-notes)
+- [License](#license)
+
 ## Core Capabilities
 
 - Register service instances by name, semantic version, IP address, and port.
