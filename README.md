@@ -3,14 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-Rusty Mesh is a fast in-memory orchestration layer for microservice/distributed systems. It gives
-services a focused HTTP control plane for registration, heartbeat-based liveness, semantic version
+Rusty Mesh is a fast in-memory orchestration layer for microservice/distributed systems. It provides a focused HTTP control plane for service registration, heartbeat-based liveness, semantic version
 matching, health checks, and sorted round-robin load balancing across compatible instances.
 
 Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their
 microservices orchestration layer without needing an external or third-party control plane.
 
-> The project's main focus is the mesh/orchestrator service. For easier onboarding, the repository
+> The project's main focus is the mesh/orchestrator service. But for easier onboarding, the repository
 > also includes a [demo-microservices directory](./demo-microservices) with four demo microservices
 > (`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
 > `catalog-service - rust`) that use the mesh and show how engineering teams can integrate
@@ -75,9 +74,9 @@ instance stores:
 - `port`
 - `timestamp`
 
-Expired entries are removed during register, find, and list operations. Load-balanced discovery
+Expired entries are removed during register, find, and list operations. **Load-balanced discovery
 sorts matching instances by name, version, IP address, and port, then returns the next instance
-using a round-robin cursor for that service and version requirement.
+using a round-robin cursor for that service and version requirement**.
 
 Rusty Mesh treats service registration as a heartbeat-driven contract. Registered services should
 refresh their registration before `registry.service_ttl_secs` elapses. Startup validation enforces
@@ -105,8 +104,9 @@ git clone https://github.com/okpainmo/rusty-mesh.git
 cp .env.sample .env
 ```
 
-> The main `.env` file selects the working/deployment environment with `APP__DEPLOY__ENV`. Depending
-> on that value, runtime environment values are loaded from one of the environment-specific files.
+### Environment Selection
+
+> The `.env` file exist solely to help selects the working/deployment environment with `APP__DEPLOY__ENV`. Depending on that value, runtime environment values are loaded from one of the environment-specific files.
 > Three environments are supported: `development`, `staging`, and `production`.
 >
 > In the main `.env`, simply uncomment the preferred environment then leave the rest commented.
@@ -178,6 +178,131 @@ MESH_TOKEN=<mesh-token>
 The health endpoint remains public so container platforms and load balancers can check liveness
 without holding the mesh token.
 
+## External Endpoint Resolution
+
+By default, Rusty Mesh utilizes internal docker DNS resolution, hence `podlets`(running non-mesh services) should not be reachable externally. However, it can also store externally reachable endpoints for operator-facing discovery responses. **This matters a lot when autoscaling is being prioritized. I.e. when multiple instances of the same service share one stable internal port while the deployment platform(as enforced by Rusty Mesh) assigns dynamic host ports for each replica. And also when external access to all services is mandatory.**. Continue reading to [learn more](#docker-resolver).
+
+External endpoint resolution is explicit and controlled by:
+
+```bash
+APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=<mode>
+```
+
+Available modes:
+
+| Mode     | Behavior                                                                                        | Production posture                        |
+| -------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `none`   | Do not inspect Docker or any platform API. Use explicit external endpoint fields when provided. | Default and safest baseline               |
+| `docker` | Inspect the registering Docker container to resolve the host port mapped to its internal port.  | Opt-in; useful for Docker/Compose scaling |
+
+The default is `none`.
+
+Resolution priority is:
+
+1. Use explicit external endpoint fields from the registration request.
+
+2. If no explicit endpoint fields are supplied and the resolver mode is `docker`, inspect Docker.
+ 
+3. On discovery response, if no external endpoint can be resolved, fall back to the internal registered endpoint.
+
+### Explicit External Registration
+
+In `none` mode, Rusty Mesh does not inspect Docker or any platform API. This is the production-safe
+baseline when the deployment platform, gateway, sidecar, or service config already knows the
+externally reachable host and port.
+
+The service sends those values during registration:
+
+```json
+{
+  "service_name": "cart-service",
+  "service_version": "1.0.0",
+  "service_port": 30302,
+  "external_host": "cart.example.com",
+  "external_port": 443,
+  "external_scheme": "https"
+}
+```
+
+`external_host` and `external_port` must be provided together. `external_scheme` is optional and
+defaults to `http`; when provided, it must be `http` or `https`.
+
+If a service does not provide an explicit external endpoint, public discovery falls back to the
+registered internal endpoint.
+
+### Docker Resolver
+
+The Docker resolver exists for dynamic-port deployments where each scaled instance shares the same
+internal container port, but Docker assigns a different host port. This is common in local Compose
+stacks and simple Docker-based demos:
+
+```yaml
+ports:
+  - "30302"
+```
+
+In that setup, the service knows it is listening on `30302` inside the container, but it does not
+automatically know which random host port Docker assigned. Docker Engine is the source of truth for
+that mapping. Rusty Mesh can ask Docker only when this mode is explicitly enabled:
+
+```bash
+APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker
+```
+
+The Docker resolver flow is:
+
+1. A service registers with its internal service port, for example `30302`.
+2. The service client sends its Docker container id in the `x-mesh-container-id` header.
+3. Rusty Mesh inspects that container through the Docker Engine socket.
+4. It reads `NetworkSettings.Ports["30302/tcp"][0].HostPort` from the Docker inspect response.
+5. It stores that host port as the service's external port.
+6. Public list and discovery responses return `ip`, `port`, and `url` using the external endpoint,
+   plus `internal_ip` and `internal_port` for the in-network endpoint.
+
+For example, if Docker maps `cart-service-1:30302` to host port `63858`, the public registry
+response becomes:
+
+```json
+{
+  "name": "cart-service",
+  "version": "1.0.0",
+  "ip": "127.0.0.1",
+  "port": 63858,
+  "internal_ip": "cart-service-1",
+  "internal_port": 30302,
+  "timestamp": 1790745600,
+  "url": "http://127.0.0.1:63858"
+}
+```
+
+Internal service-to-service discovery can still request the Docker-network endpoint by sending:
+
+```http
+x-mesh-endpoint-scope: internal
+```
+
+That keeps peer calls inside the Docker network while letting operators curl the externally
+published service URL from the host.
+
+### Docker Socket Security
+
+Mounting `/var/run/docker.sock` into a container is powerful. Even when mounted read-only at the
+filesystem level, the Docker Engine API can expose sensitive container, network, image, and runtime
+metadata. Treat Docker socket access as privileged infrastructure access and **ensure to only use it in production when you have proper security installations in place**.
+
+Rusty Mesh uses the socket only when `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker`. In that mode it inspects the registering container and resolves the host port mapped to the registered
+internal port. 
+
+You might prefer to use one of these safer options in production:
+
+- Keep `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=none` and have services register their externally reachable host and port directly when the deployment platform provides them.
+
+- Put Rusty Mesh behind the same orchestrator or service-discovery layer as the services and use internal endpoints only.
+
+- Use a restricted sidecar or proxy that exposes only the small inspect data Rusty Mesh needs.
+
+- In Kubernetes(if Rusty Mesh ever applies), use pod/service metadata from the Kubernetes API instead of Docker socket access.
+
 ## Docker
 
 `Rusty Mesh` includes a standalone Docker setup. The mesh service image can be plugged into any
@@ -206,6 +331,7 @@ APP__SERVER__HOST=0.0.0.0
 APP__SERVER__PORT=3080
 APP__REGISTRY__HEARTBEAT_INTERVAL_SECS=5
 APP__REGISTRY__SERVICE_TTL_SECS=15
+APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=none
 APP__SECURITY__REQUIRE_MESH_TOKEN=true
 ```
 
@@ -223,8 +349,7 @@ docker run --rm \
 
 ## Integrating Into A Microservice Project
 
-If you want Rusty Mesh inside an existing microservice workspace, add it as one service in your
-parent repository's services directory.
+If you want Rusty Mesh inside an existing microservice workspace, simply add it as a standalone service in your parent repository's microservices directory.
 
 Move into the parent services directory:
 
@@ -310,14 +435,64 @@ All endpoints are nested under:
 
 | Method | Path                                                        | Purpose                                                    |
 | ------ | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| GET    | `/`                                                         | Show a short mesh welcome/status message                   |
 | GET    | `/health`                                                   | Check service health                                       |
 | GET    | `/services`                                                 | List active service instances                              |
 | POST   | `/services`                                                 | Register or refresh an instance                            |
+| POST   | `/services/heartbeat`                                       | Update instance lease TTL                                  |
 | DELETE | `/services`                                                 | Unregister an instance                                     |
 | GET    | `/services/{service_name}/{service_version}`                | Find a compatible instance with round-robin load balancing |
 | GET    | `/services/{service_name}/{service_version}/{service_port}` | Find a compatible instance on a specific port              |
 
 `/health` is public. All `/services` routes require the shared mesh token.
+
+## Postman Collections
+
+Postman collections are available in the [postman](postman) directory. Import them separately when
+you want to exercise the mesh API or the demo services without rebuilding requests by hand.
+
+| Collection           | File                                                                                                     | Folders                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `mesh-core`          | [postman/mesh-core.postman_collection.json](postman/mesh-core.postman_collection.json)                   | `health`, `registry`               |
+| `demo-microservices` | [postman/demo-microservices.postman_collection.json](postman/demo-microservices.postman_collection.json) | `cart`, `catalog`, `order`, `user` |
+
+The `mesh-core` collection contains:
+
+- `health`: welcome and health-check endpoints.
+- `registry`: registration, heartbeat, list, discovery, internal-scope discovery, and unregistration
+  endpoints.
+
+Before running `mesh-core` requests, update these collection variables for your environment:
+
+| Variable                      | Purpose                                     | Default                             |
+| ----------------------------- | ------------------------------------------- | ----------------------------------- |
+| `mesh_core_base_url`          | Rusty Mesh API base URL                     | `http://127.0.0.1:3080/api/v1/mesh` |
+| `mesh_token`                  | Shared token for protected registry routes  | `local-demo-mesh-token`             |
+| `service_name`                | Service name used in registry examples      | `orders`                            |
+| `service_version`             | Exact service version used for registration | `1.2.3`                             |
+| `service_version_requirement` | Encoded semver requirement for discovery    | `%5E1.0.0`                          |
+| `internal_host`               | Internal service host/IP                    | `10.0.0.20`                         |
+| `internal_port`               | Internal service port                       | `3000`                              |
+| `external_host`               | Public service host/IP                      | `orders.example.com`                |
+| `external_port`               | Public service port                         | `443`                               |
+| `external_scheme`             | Public service URL scheme                   | `https`                             |
+| `container_id`                | Optional Docker container id for resolution | empty                               |
+
+The `demo-microservices` collection contains:
+
+- `cart`: welcome, health, cart feedback, and order-service call endpoints.
+- `catalog`: welcome, health, catalog feedback, and cart-service call endpoints.
+- `order`: welcome, health, order feedback, and user-service call endpoints.
+- `user`: welcome, health, user feedback, and catalog-service call endpoints.
+
+Before running `demo-microservices` requests, update these collection variables:
+
+| Variable                   | Purpose                  | Default                  |
+| -------------------------- | ------------------------ | ------------------------ |
+| `cart_service_base_url`    | Cart demo service URL    | `http://127.0.0.1:30302` |
+| `catalog_service_base_url` | Catalog demo service URL | `http://127.0.0.1:30303` |
+| `order_service_base_url`   | Order demo service URL   | `http://127.0.0.1:30304` |
+| `user_service_base_url`    | User demo service URL    | `http://127.0.0.1:30301` |
 
 ### Register A Service
 
@@ -329,7 +504,11 @@ curl -X POST \
   -d '{
     "service_name": "orders",
     "service_version": "1.2.3",
-    "service_port": 3000
+    "service_ip": "10.0.0.20",
+    "service_port": 3000,
+    "external_host": "orders.example.com",
+    "external_port": 443,
+    "external_scheme": "https"
   }' \
   http://127.0.0.1:3080/api/v1/mesh/services
 ```
@@ -342,14 +521,60 @@ Response:
   "response": {
     "service_name": "orders",
     "service_version": "1.2.3",
-    "service_ip": "10.0.0.20",
-    "service_port": 3000
+    "ip": "orders.example.com",
+    "port": 443,
+    "internal_ip": "10.0.0.20",
+    "internal_port": 3000,
+    "url": "https://orders.example.com:443"
   },
   "error": null
 }
 ```
 
-Calling the same endpoint again refreshes the service timestamp.
+The external fields are optional. Use them when the service already knows its externally reachable
+endpoint. If `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker` is enabled and no explicit
+external endpoint is supplied, Rusty Mesh tries to resolve the external port from Docker instead.
+
+Calling the same endpoint again refreshes the service timestamp. Alternatively, you can use the
+explicit heartbeat endpoint:
+
+```bash
+curl -X POST \
+  -H "authorization: Bearer ${MESH_TOKEN}" \
+  -H "content-type: application/json" \
+  -d '{
+    "service_name": "orders",
+    "service_version": "1.2.3",
+    "service_ip": "10.0.0.20",
+    "service_port": 3000
+  }' \
+  http://127.0.0.1:3080/api/v1/mesh/services/heartbeat
+```
+
+Response:
+
+```json
+{
+  "response_message": "Service heartbeat refreshed successfully",
+  "response": {
+    "service_name": "orders",
+    "service_version": "1.2.3",
+    "ip": "orders.example.com",
+    "port": 443,
+    "internal_ip": "10.0.0.20",
+    "internal_port": 3000,
+    "url": "https://orders.example.com:443"
+  },
+  "error": null
+}
+```
+
+> **Heartbeat Identity Matching**: The heartbeat endpoint supports flexible lookup. It will match
+> the instance by its **Internal Identity** (name, version, IP, and port) or by its **External
+> Identity** (matching against the `external_host` and `external_port` used during registration).
+> The heartbeat response returns the refreshed instance with the same external `ip`, `port`, and
+> `url` fields used by registration and public discovery, plus `internal_ip` and `internal_port` for
+> in-network calls.
 
 Production service clients should call this endpoint on the configured heartbeat interval. With the
 default policy, each service instance should refresh every `5` seconds and expires if it has not
@@ -373,9 +598,12 @@ Response:
   "response": {
     "name": "orders",
     "version": "1.2.3",
-    "ip": "10.0.0.20",
-    "port": 3000,
-    "timestamp": 1790745600
+    "ip": "orders.example.com",
+    "port": 443,
+    "internal_ip": "10.0.0.20",
+    "internal_port": 3000,
+    "timestamp": 1790745600,
+    "url": "https://orders.example.com:443"
   },
   "error": null
 }
@@ -384,14 +612,16 @@ Response:
 > **When multiple active instances match, Rusty Mesh sorts the candidates by name, version, IP
 > address, and port, then returns them in round-robin order on repeated requests**.
 
-### Find A Service On A Specific Port
+### Find A Service On A Specific External Port
 
-The original port-specific lookup remains available when a client needs to target an exact
-registered port:
+The port-specific lookup targets the external port when a service has an external endpoint. This is
+important when multiple replicas share the same internal port but publish to different host ports.
+If a service has no external endpoint, Rusty Mesh falls back to matching its internal registered
+port.
 
 ```bash
 curl -H "authorization: Bearer ${MESH_TOKEN}" \
-  http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0/3000
+  http://127.0.0.1:3080/api/v1/mesh/services/orders/%5E1.0.0/443
 ```
 
 If no compatible service is found:
@@ -424,11 +654,15 @@ Response:
       {
         "name": "orders",
         "version": "1.2.3",
-        "ip": "10.0.0.20",
-        "port": 3000,
-        "timestamp": 1790745600
+        "ip": "orders.example.com",
+        "port": 443,
+        "internal_ip": "10.0.0.20",
+        "internal_port": 3000,
+        "timestamp": 1790745600,
+        "url": "https://orders.example.com:443"
       }
-    ]
+    ],
+    "services-count": 1
   },
   "error": null
 }
@@ -457,10 +691,26 @@ Response:
   "response": {
     "service_name": "orders",
     "service_version": "1.2.3",
-    "service_ip": "10.0.0.20",
-    "service_port": 3000
+    "ip": "10.0.0.20",
+    "port": 3000,
+    "internal_ip": "10.0.0.20",
+    "internal_port": 3000,
+    "url": "http://10.0.0.20:3000"
   },
   "error": null
+}
+```
+
+If the service instance is not registered:
+
+```json
+{
+  "response_message": "Service instance is not registered.",
+  "response": null,
+  "error": {
+    "message": "Service instance is not registered.",
+    "code": "SERVICE_NOT_REGISTERED"
+  }
 }
 ```
 
@@ -487,9 +737,10 @@ across compatible instances.
 
 ## Configuration
 
-Environment files are loaded before configuration is deserialized:
+All environment variables files are loaded before configuration is deserialized:
 
-1. `.env`
+1. `.env` - in which the current working environment is selected - [as earlier described](#environment-selection).
+
 2. `.env.{APP__DEPLOY__ENV}`, for example `.env.development`
 
 The config loader then resolves application configuration in this order, from lowest to highest
@@ -502,17 +753,19 @@ priority:
 
 Default values live in [config/base.toml](config/base.toml).
 
-| Variable                                 | Purpose                             | Default        |
-| ---------------------------------------- | ----------------------------------- | -------------- |
-| `APP__ENV`                               | Selects the config environment      | required       |
-| `APP__SERVER__HOST`                      | Server bind host                    | `127.0.0.1`    |
-| `APP__SERVER__PORT`                      | Server bind port                    | `3080`         |
-| `APP__SERVER__REQUEST_TIMEOUT_SECS`      | Request timeout in seconds          | `60`           |
-| `APP__REGISTRY__HEARTBEAT_INTERVAL_SECS` | Expected service heartbeat interval | `5`            |
-| `APP__REGISTRY__SERVICE_TTL_SECS`        | Service registration TTL            | `15`           |
-| `APP__SECURITY__REQUIRE_MESH_TOKEN`      | Require token on registry routes    | `true`         |
-| `APP__SECURITY__MESH_TOKEN`              | Shared registry access token        | env override   |
-| `APP__APP__NAME`                         | Service name in health response     | `mesh_service` |
+| Variable                                      | Purpose                                         | Default        |
+| --------------------------------------------- | ----------------------------------------------- | -------------- |
+| `APP__ENV`                                    | Selects the config environment                  | required       |
+| `APP__SERVER__HOST`                           | Server bind host                                | `127.0.0.1`    |
+| `APP__SERVER__PORT`                           | Server bind port                                | `3080`         |
+| `APP__SERVER__REQUEST_TIMEOUT_SECS`           | Request timeout in seconds                      | `60`           |
+| `APP__REGISTRY__HEARTBEAT_INTERVAL_SECS`      | Expected service heartbeat interval             | `5`            |
+| `APP__REGISTRY__SERVICE_TTL_SECS`             | Service registration TTL                        | `15`           |
+| `APP__REGISTRY__PUBLIC_HOST`                  | Host used when Docker publishes to wildcard IPs | empty          |
+| `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION` | External endpoint resolver: `none` or `docker`  | `none`         |
+| `APP__SECURITY__REQUIRE_MESH_TOKEN`           | Require token on registry routes                | `true`         |
+| `APP__SECURITY__MESH_TOKEN`                   | Shared registry access token                    | env override   |
+| `APP__APP__NAME`                              | Service name in health response                 | `mesh_service` |
 
 Example:
 
@@ -521,6 +774,7 @@ APP__ENV=development \
 APP__SECURITY__MESH_TOKEN=replace-with-a-strong-token \
 APP__REGISTRY__HEARTBEAT_INTERVAL_SECS=10 \
 APP__REGISTRY__SERVICE_TTL_SECS=30 \
+APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=none \
 cargo run
 ```
 
@@ -573,12 +827,15 @@ cargo test
 
 ## Operational Notes
 
-- Registry state is in memory and is lost when the process restarts.
-- There is no multi-node replication.
-- Registry routes are protected by a shared mesh token. This is a lightweight service-to-service
-  boundary, not per-service identity, RBAC, mTLS, or end-user authorization.
+- **Registry state is in-memory** and is lost when the process restarts. This design is intentional as it keeps the system simple, focused, highly performant, and flexible enough to permit customized scaling/extending. A reasonable area(in terms of extending the current system) that comes to mind is adding data persistence via a queue(background jobs), which will be triggered after every successful service registration/de-registration.
+
+- **There is no multi-node replication**. As it stands, deploying multiple instances of Rusty Mesh remains to be handled as you see fit. A very good way to utilize Rusty Mesh, will be to treat it's deployment as `pods` - similar to Kubernetes. With each pod consisting of a Rusty Mesh copy, and `podlets` - other non-mesh services. Of course, this does not prevent individual service scaling for cases where only specific `podlets` should be added for load balancing.
+
+- Registry routes are protected by a shared mesh token. This is a lightweight service-to-service boundary, not per-service identity, RBAC, mTLS, or end-user authorization.
+
 - Keep `APP__SECURITY__REQUIRE_MESH_TOKEN=true` outside isolated local debugging, and set
   `APP__SECURITY__MESH_TOKEN` from the active environment file or deployment secret store.
+  
 - The health endpoint is intentionally public for container health checks and load balancers.
 - Service advertised-host detection prefers `x-mesh-advertise-host`, falls back to
   `x-forwarded-for`, and finally uses localhost.
