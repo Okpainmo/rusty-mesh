@@ -230,7 +230,7 @@ Available modes:
 | Mode     | Behavior                                                                                        | Production posture                        |
 | -------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | `none`   | Do not inspect Docker or any platform API. Use explicit external endpoint fields when provided. | Default and safest baseline               |
-| `docker` | Inspect the registering Docker container to resolve the host port mapped to its internal port.  | Opt-in; useful for Docker/Compose scaling |
+| `docker` | Inspect the registering Docker container to resolve the host port mapped to its internal port.  | Opt-in; requires a trusted control-plane deployment |
 
 The default is `none`.
 
@@ -326,14 +326,34 @@ published service URL from the host.
 
 Mounting `/var/run/docker.sock` into a container is powerful. Even when mounted read-only at the
 filesystem level, the Docker Engine API can expose sensitive container, network, image, and runtime
-metadata. Treat Docker socket access as privileged infrastructure access and **ensure to only use it
-in production when you have proper security installations in place**.
+metadata. Treat Docker socket access as privileged infrastructure access, not as a harmless
+read-only helper.
 
 Rusty Mesh uses the socket only when `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker`. In that
 mode it inspects the registering container and resolves the host port mapped to the registered
 internal port.
 
-You might prefer to use one of these safer options in production:
+Using the Docker resolver in production can be valid when Rusty Mesh is deployed as a trusted
+control-plane component with strong network isolation, strict mesh-token handling, patched hosts,
+centralized monitoring, and restricted operator access. In that model, Docker inspection is an
+intentional control-plane privilege that lets Rusty Mesh resolve runtime endpoint metadata for the
+services it manages.
+
+Keep these guardrails in place when enabling it:
+
+- Enable `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker` only for deployments that explicitly
+  trust Rusty Mesh with Docker inspection.
+
+- Do not log or return raw Docker inspect payloads.
+
+- Keep registry routes private and protected by a strong `APP__SECURITY__MESH_TOKEN`.
+
+- Treat `x-mesh-container-id` as privileged input from trusted service clients.
+
+- Restrict the Docker host, firewall rules, service network, and operator access so the mesh server
+  cannot be reached from untrusted networks.
+
+You might prefer one of these alternatives when Rusty Mesh should not hold Docker-level privilege:
 
 - Keep `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=none` and have services register their
   externally reachable host and port directly when the deployment platform provides them.

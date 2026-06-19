@@ -172,8 +172,9 @@ changes.
 The demo Compose stack explicitly sets
 `APP__REGISTRY__EXTERNAL_ENDPOINT_RESOLUTION=docker` for Rusty Mesh. That opt-in mode lets Rusty
 Mesh inspect each registering container and resolve the random host port mapped to that service's
-stable internal port. Outside this demo, keep the resolver as `none` unless the deployment is
-intentionally allowing Docker inspection.
+stable internal port. Outside this demo, keep the resolver as `none` unless Rusty Mesh is being
+deployed as a trusted control-plane component and the deployment intentionally allows Docker
+inspection.
 
 The compose setup starts:
 
