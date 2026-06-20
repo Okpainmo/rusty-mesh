@@ -17,3 +17,6 @@ node_modules
 # traffic simulation
 k6-traffic-simulation.js
 
+# internal
+internal
+
