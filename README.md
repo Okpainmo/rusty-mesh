@@ -18,6 +18,7 @@ microservices orchestration layer without needing an external or third-party con
 
 ## Table Of Contents
 
+- [Static Analysis/Code Standardization](#static-analysiscode-standardization)
 - [Core Capabilities](#core-capabilities)
 - [Architecture](#architecture)
 - [Requirements](#requirements)
@@ -39,10 +40,31 @@ microservices orchestration layer without needing an external or third-party con
   - [Unregister A Service](#unregister-a-service)
 - [Service Discovery Semantics](#service-discovery-semantics)
 - [Configuration](#configuration)
+- [Traffic Simulation](#traffic-simulation)
 - [Development](#development)
 - [Testing](#testing)
 - [Operational Notes](#operational-notes)
 - [License](#license)
+
+## Static Analysis/Code Standardization
+
+Rusty Mesh is a Rust service at it's core, but the root build uses JavaScript ecosystem tooling for
+repository workflow and code-standardization checks. The Node/Bun layer is intentionally limited to
+developer tooling; the mesh runtime remains Rust-based.
+
+- `package.json` defines the Bun-powered workflow scripts.
+- Husky installs Git hooks through the `prepare` script.
+- Commitlint enforces Conventional Commit messages in `.husky/commit-msg`.
+- Pre-commit checks run `cargo check`, `cargo fmt -- --check`, Clippy with warnings denied, and
+  Markdown formatting.
+- Pre-push checks run the Rust test suite and Markdown formatting checks.
+- Prettier is used for Markdown formatting and documentation consistency.
+
+Install the tooling with:
+
+```bash
+bun install
+```
 
 ## Core Capabilities
 
@@ -856,6 +878,38 @@ active environment file.
 The heartbeat interval must be lower than the TTL. For example, a `10` second heartbeat with a `30`
 second TTL gives each service roughly three heartbeat opportunities before it is removed from
 discovery.
+
+## Traffic Simulation
+
+Rusty Mesh includes a k6 traffic simulation script at:
+
+```text
+k6-traffic-simulation/main.js
+```
+
+The script checks public health, registers one unique service instance per virtual user, and rotates
+through heartbeat, list, discovery, internal-scope discovery, exact external-port discovery, and
+unregister cleanup. Use [k6-traffic-simulation/.env.sample](k6-traffic-simulation/.env.sample) as
+the template for local k6-only environment values.
+
+Create a local k6 environment file from the template:
+
+```bash
+cp k6-traffic-simulation/.env.sample k6-traffic-simulation/.env
+```
+
+Edit `k6-traffic-simulation/.env`, then source it and run the simulation:
+
+```bash
+set -a
+. ./k6-traffic-simulation/.env
+set +a
+k6 run k6-traffic-simulation/main.js
+```
+
+See [k6-traffic-simulation/README.md](k6-traffic-simulation/README.md) for environment-loading
+details. The k6 script does not automatically read the app's root `.env`; source the dedicated
+`k6-traffic-simulation/.env` file before running it.
 
 ## Development
 
