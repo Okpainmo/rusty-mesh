@@ -10,11 +10,11 @@ matching, health checks, and sorted round-robin load balancing across compatible
 Built with Rust, Axum, and Tokio, Rusty Mesh is designed for teams that want full control over their
 microservices orchestration layer without needing an external or third-party control plane.
 
-> The project's main focus is the mesh/orchestrator layer. But for easier onboarding, the repository
+> While the project's main focus is the mesh/orchestrator layer, for easier onboarding, the repository
 > also includes a [demo-microservices directory](./demo-microservices) with four demo microservices
 > (`order-service - nodejs`, `user-service - rust`, `cart-service - python`, and
-> `catalog-service - rust`) that use the mesh and show how engineering teams can integrate
-> `rusty-mesh` into their microservice builds.
+> `catalog-service - rust`) that use the mesh and show how engineering teams can integrate it into
+> their microservice builds.
 
 ## Table Of Contents
 
